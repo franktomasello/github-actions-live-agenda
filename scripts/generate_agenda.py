@@ -176,6 +176,18 @@ def _esc(text: str) -> str:
     return html.escape(text)
 
 
+def _event_accent(event: Event) -> str:
+    """Pick a left-border accent color based on time of day."""
+    if event.is_all_day:
+        return "#af52de"  # purple for all-day
+    h = event.start.hour
+    if h < 12:
+        return "#ff9f0a"  # amber morning
+    if h < 17:
+        return "#007aff"  # blue afternoon
+    return "#5e5ce6"  # indigo evening
+
+
 def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     now = datetime.now(tz)
     event_list = list(events)
@@ -183,12 +195,15 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     for event in event_list:
         grouped.setdefault(section_title(now, event), []).append(event)
 
+    global_idx = 0
     sections: list[str] = []
     if not grouped:
         sections.append(
-            '<section class="day-group">'
+            '<section class="day-group fade-in">'
             '<div class="empty-state">'
-            '<div class="empty-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>'
+            '<div class="empty-icon">'
+            '<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/></svg>'
+            "</div>"
             "<h2>All clear</h2>"
             f"<p>Nothing on the books for the next {WINDOW_HOURS} hours.</p>"
             "</div></section>"
@@ -202,43 +217,46 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
                 dur = duration_str(event)
                 is_now = rel in ("Now", "In progress")
                 is_last = i == len(group) - 1
+                accent = _event_accent(event)
 
                 now_class = " is-now" if is_now else ""
                 last_class = " is-last" if is_last else ""
 
-                # Live pulse dot for current events
                 indicator = '<span class="pulse"></span>' if is_now else '<span class="dot"></span>'
 
                 badge = f'<span class="badge live">{_esc(rel)}</span>' if is_now else ""
                 rel_html = f'<span class="countdown">{_esc(rel)}</span>' if rel and not is_now else ""
                 dur_html = f'<span class="dur">{_esc(dur)}</span>' if dur else ""
 
-                loc_icon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>'
+                loc_icon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>'
                 location = (
                     f'<div class="loc">{loc_icon}<span>{_esc(event.location)}</span></div>'
                     if event.location
                     else ""
                 )
                 description = _esc(event.description).replace("\n", "<br>")
-                notes_icon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>'
+                notes_icon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>'
                 details = (
                     f'<details><summary>{notes_icon} Notes</summary><div class="notes">{description}</div></details>'
                     if event.description
                     else ""
                 )
 
+                delay = f' style="animation-delay:{global_idx * 40}ms"'
+                global_idx += 1
+
                 cards.append(
-                    f'<div class="tl-item{now_class}{last_class}">'
+                    f'<div class="tl-item{now_class}{last_class} fade-in"{delay}>'
                     f'<div class="tl-marker">{indicator}</div>'
-                    f'<article class="card">'
+                    f'<article class="card" style="--accent-bar:{accent}">'
                     f'<div class="card-top">'
                     f'<div class="card-time">'
                     f'<span class="t">{_esc(format_time_short(event))}</span>'
-                    f'{dur_html}'
+                    f"{dur_html}"
                     f"</div>"
                     f'<div class="card-meta-right">{badge}{rel_html}</div>'
                     f"</div>"
-                    f'<h3>{_esc(event.title)}</h3>'
+                    f"<h3>{_esc(event.title)}</h3>"
                     f'<div class="range">{_esc(format_time(event))}</div>'
                     f"{location}"
                     f"{details}"
@@ -254,8 +272,8 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
             sections.append(
                 f'<section class="day-group">'
                 f'<div class="day-head{"" if not is_today else " is-today"}">'
-                f'<h2>{_esc(heading)}</h2>'
-                f'{date_sub}'
+                f"<h2>{_esc(heading)}</h2>"
+                f"{date_sub}"
                 f'<span class="cnt">{count}</span>'
                 f"</div>"
                 f'<div class="timeline">{"".join(cards)}</div>'
@@ -268,12 +286,16 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     if next_event:
         rel = time_until(next_event, now)
         is_now = rel in ("Now", "In progress")
-        rel_display = f'<span class="hero-live">{_esc(rel)}</span>' if is_now else f'<span class="hero-eta">{_esc(rel)}</span>'
+        rel_display = (
+            f'<span class="hero-live">{_esc(rel)}</span>'
+            if is_now
+            else f'<span class="hero-eta">{_esc(rel)}</span>'
+        )
         hero_next = (
-            f'<div class="hero-next">'
-            f'<span class="hero-next-label">Next</span>'
+            f'<div class="hero-next fade-in" style="animation-delay:60ms">'
+            f'<span class="hero-next-label">{"Live" if is_now else "Next"}</span>'
             f'<span class="hero-next-title">{_esc(next_event.title)}</span>'
-            f'{rel_display}'
+            f"{rel_display}"
             f"</div>"
         )
 
@@ -296,6 +318,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       color-scheme: light dark;
       --bg:        #f2f2f7;
       --surface:   #ffffff;
+      --surface-2: #f8f8fa;
       --text:      #1c1c1e;
       --text-2:    #8e8e93;
       --text-3:    #aeaeb2;
@@ -304,33 +327,47 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       --live:      #34c759;
       --live-bg:   rgba(52,199,89,.08);
       --live-text: #248a3d;
-      --border:    rgba(0,0,0,.05);
-      --border-2:  rgba(0,0,0,.08);
-      --tl-line:   rgba(0,0,0,.07);
-      --card-shadow: 0 1px 3px rgba(0,0,0,.04), 0 4px 14px rgba(0,0,0,.03);
-      --card-hover: 0 2px 8px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.05);
-      --r:  14px;
-      --r2: 20px;
+      --border:    rgba(0,0,0,.04);
+      --border-2:  rgba(0,0,0,.07);
+      --tl-line:   rgba(0,0,0,.06);
+      --card-shadow: 0 1px 2px rgba(0,0,0,.03), 0 4px 16px rgba(0,0,0,.04);
+      --card-hover: 0 2px 6px rgba(0,0,0,.05), 0 12px 28px rgba(0,0,0,.07);
+      --r:  16px;
+      --r2: 22px;
     }}
 
     @media (prefers-color-scheme: dark) {{
       :root {{
         --bg:        #000000;
-        --surface:   #1c1c1e;
+        --surface:   rgba(28,28,30,.92);
+        --surface-2: rgba(44,44,46,.6);
         --text:      #f5f5f7;
         --text-2:    #98989d;
         --text-3:    #636366;
         --accent:    #0a84ff;
-        --accent-bg: rgba(10,132,255,.12);
+        --accent-bg: rgba(10,132,255,.14);
         --live:      #30d158;
         --live-bg:   rgba(48,209,88,.1);
-        --live-text: #30d158;
-        --border:    rgba(255,255,255,.05);
-        --border-2:  rgba(255,255,255,.08);
+        --live-text: #32d74b;
+        --border:    rgba(255,255,255,.04);
+        --border-2:  rgba(255,255,255,.07);
         --tl-line:   rgba(255,255,255,.06);
-        --card-shadow: 0 1px 3px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.15);
-        --card-hover: 0 2px 8px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.2);
+        --card-shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.2);
+        --card-hover: 0 2px 6px rgba(0,0,0,.5), 0 12px 28px rgba(0,0,0,.3);
       }}
+    }}
+
+    /* ── Animations ── */
+    @keyframes fade-up {{
+      from {{ opacity: 0; transform: translateY(12px); }}
+      to   {{ opacity: 1; transform: translateY(0); }}
+    }}
+    .fade-in {{
+      animation: fade-up .45s cubic-bezier(.22,1,.36,1) both;
+    }}
+    @keyframes pulse-glow {{
+      0%,100% {{ box-shadow: 0 0 0 0 rgba(52,199,89,.35); }}
+      50%     {{ box-shadow: 0 0 0 7px rgba(52,199,89,0); }}
     }}
 
     /* ── Base ── */
@@ -349,32 +386,37 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     }}
 
     .wrap {{
-      max-width: 680px;
+      max-width: 640px;
       margin: 0 auto;
-      padding: 48px 24px 96px;
+      padding: 56px 24px 100px;
     }}
 
     /* ── Header ── */
     .hero {{
-      margin-bottom: 40px;
+      margin-bottom: 44px;
     }}
     .hero h1 {{
-      font-size: clamp(1.75rem, 4vw, 2.25rem);
-      font-weight: 700;
-      letter-spacing: -0.035em;
-      line-height: 1.15;
+      font-size: clamp(1.85rem, 4.5vw, 2.5rem);
+      font-weight: 750;
+      letter-spacing: -0.04em;
+      line-height: 1.1;
+      background: linear-gradient(135deg, var(--text) 0%, var(--text-2) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }}
     .hero-sub {{
-      color: var(--text-2);
-      font-size: 0.875rem;
-      margin-top: 6px;
-      font-weight: 400;
+      color: var(--text-3);
+      font-size: 0.82rem;
+      margin-top: 8px;
+      font-weight: 420;
+      letter-spacing: 0.005em;
     }}
     .hero-chips {{
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
-      margin-top: 18px;
+      margin-top: 20px;
     }}
     .chip {{
       display: inline-flex;
@@ -382,40 +424,44 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       gap: 4px;
       background: var(--accent-bg);
       color: var(--accent);
-      padding: 4px 11px;
+      padding: 5px 12px;
       border-radius: 999px;
-      font-size: 0.75rem;
-      font-weight: 550;
-      letter-spacing: 0.01em;
+      font-size: 0.72rem;
+      font-weight: 560;
+      letter-spacing: 0.015em;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
     }}
 
     /* ── Hero next-up ── */
     .hero-next {{
       display: flex;
       align-items: center;
-      gap: 12px;
-      margin-top: 24px;
-      padding: 14px 18px;
+      gap: 14px;
+      margin-top: 28px;
+      padding: 16px 20px;
       background: var(--surface);
       border: 1px solid var(--border-2);
       border-radius: var(--r);
       box-shadow: var(--card-shadow);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
     }}
     .hero-next-label {{
-      font-size: 0.65rem;
-      font-weight: 700;
+      font-size: 0.62rem;
+      font-weight: 720;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.1em;
       color: var(--accent);
       background: var(--accent-bg);
-      padding: 3px 8px;
-      border-radius: 6px;
+      padding: 4px 10px;
+      border-radius: 8px;
       flex-shrink: 0;
     }}
     .hero-next-title {{
       flex: 1;
-      font-weight: 600;
-      font-size: 0.9rem;
+      font-weight: 620;
+      font-size: 0.92rem;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -429,16 +475,19 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     }}
     .hero-live {{
       color: var(--live-text);
-      font-size: 0.75rem;
-      font-weight: 700;
+      font-size: 0.7rem;
+      font-weight: 720;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.06em;
       flex-shrink: 0;
+      padding: 3px 10px;
+      background: var(--live-bg);
+      border-radius: 999px;
     }}
 
     /* ── Day groups ── */
     .day-group {{
-      margin-bottom: 36px;
+      margin-bottom: 40px;
     }}
     .day-group:last-of-type {{
       margin-bottom: 0;
@@ -447,54 +496,59 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-bottom: 16px;
+      margin-bottom: 18px;
       padding-left: 2px;
     }}
     .day-head h2 {{
-      font-size: 1.05rem;
+      font-size: 0.98rem;
       font-weight: 700;
-      letter-spacing: -0.015em;
+      letter-spacing: -0.01em;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-size: 0.72rem;
+      color: var(--text-2);
     }}
     .day-head.is-today h2 {{
       color: var(--accent);
     }}
     .day-date {{
-      font-size: 0.8rem;
+      font-size: 0.72rem;
       color: var(--text-3);
-      font-weight: 400;
+      font-weight: 420;
     }}
     .cnt {{
       margin-left: auto;
-      font-size: 0.7rem;
-      font-weight: 600;
+      font-size: 0.65rem;
+      font-weight: 620;
       color: var(--text-3);
-      background: var(--border);
-      padding: 2px 9px;
+      background: var(--surface-2);
+      padding: 3px 10px;
       border-radius: 999px;
+      border: 1px solid var(--border);
     }}
 
     /* ── Timeline ── */
     .timeline {{
       position: relative;
-      padding-left: 28px;
+      padding-left: 24px;
     }}
 
     .tl-item {{
       position: relative;
-      padding-bottom: 12px;
+      padding-bottom: 10px;
     }}
     .tl-item:last-child {{
       padding-bottom: 0;
     }}
 
-    /* Vertical line */
+    /* Vertical connector */
     .tl-item::before {{
       content: '';
       position: absolute;
-      left: -21px;
-      top: 10px;
+      left: -17px;
+      top: 12px;
       bottom: -2px;
-      width: 2px;
+      width: 1.5px;
       background: var(--tl-line);
       border-radius: 1px;
     }}
@@ -505,60 +559,83 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     /* Marker */
     .tl-marker {{
       position: absolute;
-      left: -28px;
-      top: 5px;
-      width: 16px;
-      height: 16px;
+      left: -24px;
+      top: 6px;
+      width: 14px;
+      height: 14px;
       display: flex;
       align-items: center;
       justify-content: center;
       z-index: 1;
     }}
     .dot {{
-      width: 8px;
-      height: 8px;
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
-      background: var(--tl-line);
+      background: var(--border-2);
       border: 2px solid var(--bg);
-      box-shadow: 0 0 0 2px var(--tl-line);
+      box-shadow: 0 0 0 1.5px var(--tl-line);
+      transition: transform .2s ease;
+    }}
+    .tl-item:hover .dot {{
+      transform: scale(1.3);
     }}
     .pulse {{
-      width: 10px;
-      height: 10px;
+      width: 9px;
+      height: 9px;
       border-radius: 50%;
       background: var(--live);
-      box-shadow: 0 0 0 3px var(--live-bg);
-      animation: pulse-ring 2s ease-in-out infinite;
-    }}
-    @keyframes pulse-ring {{
-      0%,100% {{ box-shadow: 0 0 0 3px var(--live-bg); }}
-      50% {{ box-shadow: 0 0 0 8px transparent; }}
+      animation: pulse-glow 2.5s cubic-bezier(.4,0,.6,1) infinite;
     }}
 
     /* ── Cards ── */
     .card {{
+      position: relative;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--r);
-      padding: 16px 18px;
+      padding: 18px 20px 18px 24px;
       box-shadow: var(--card-shadow);
-      transition: box-shadow .2s ease, border-color .2s ease, transform .2s ease;
+      transition: box-shadow .25s cubic-bezier(.22,1,.36,1), border-color .25s ease, transform .25s cubic-bezier(.22,1,.36,1);
+      overflow: hidden;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }}
+    /* Left accent bar */
+    .card::before {{
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 12px;
+      bottom: 12px;
+      width: 3px;
+      border-radius: 0 3px 3px 0;
+      background: var(--accent-bar, var(--accent));
+      opacity: .65;
+      transition: opacity .2s ease;
     }}
     .card:hover {{
       box-shadow: var(--card-hover);
       border-color: var(--border-2);
-      transform: translateY(-1px);
+      transform: translateY(-2px);
+    }}
+    .card:hover::before {{
+      opacity: 1;
     }}
     .tl-item.is-now .card {{
       background: var(--live-bg);
-      border-color: rgba(52,199,89,.2);
+      border-color: rgba(52,199,89,.18);
+    }}
+    .tl-item.is-now .card::before {{
+      background: var(--live);
+      opacity: 1;
     }}
 
     .card-top {{
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }}
     .card-time {{
       display: flex;
@@ -566,15 +643,18 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       gap: 8px;
     }}
     .t {{
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       font-weight: 600;
       color: var(--text-2);
       letter-spacing: 0.01em;
     }}
     .dur {{
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       color: var(--text-3);
-      font-weight: 500;
+      font-weight: 480;
+      padding: 1px 7px;
+      background: var(--surface-2);
+      border-radius: 6px;
     }}
     .card-meta-right {{
       display: flex;
@@ -583,39 +663,41 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     }}
 
     .card h3 {{
-      font-size: 1rem;
-      font-weight: 620;
+      font-size: 1.02rem;
+      font-weight: 640;
       line-height: 1.35;
-      letter-spacing: -0.01em;
-      margin-bottom: 4px;
+      letter-spacing: -0.015em;
+      margin-bottom: 3px;
     }}
     .range {{
-      font-size: 0.78rem;
-      color: var(--text-2);
-      margin-bottom: 4px;
+      font-size: 0.75rem;
+      color: var(--text-3);
+      margin-bottom: 2px;
+      font-weight: 420;
     }}
 
     .badge {{
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      padding: 2px 9px;
+      padding: 3px 10px;
       border-radius: 999px;
-      font-size: 0.65rem;
-      font-weight: 700;
+      font-size: 0.62rem;
+      font-weight: 720;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.05em;
     }}
     .badge.live {{
       background: var(--live-bg);
       color: var(--live-text);
-      border: 1px solid rgba(52,199,89,.2);
+      border: 1px solid rgba(52,199,89,.18);
     }}
 
     .countdown {{
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       color: var(--accent);
-      font-weight: 550;
+      font-weight: 560;
+      font-variant-numeric: tabular-nums;
     }}
 
     /* Location */
@@ -623,51 +705,56 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       color: var(--text-2);
-      margin-top: 4px;
+      margin-top: 6px;
+      font-weight: 440;
     }}
     .loc svg {{
-      opacity: .45;
+      opacity: .4;
       flex-shrink: 0;
     }}
 
     /* Notes */
     details {{
-      margin-top: 10px;
+      margin-top: 12px;
     }}
     summary {{
       cursor: pointer;
-      font-size: 0.78rem;
-      font-weight: 550;
+      font-size: 0.76rem;
+      font-weight: 560;
       color: var(--accent);
       user-select: none;
       display: inline-flex;
       align-items: center;
       gap: 5px;
+      padding: 4px 0;
+      transition: opacity .15s ease;
     }}
     summary svg {{
       opacity: .5;
     }}
     summary:hover {{
-      text-decoration: underline;
+      opacity: .75;
     }}
     details[open] summary {{
-      margin-bottom: 6px;
+      margin-bottom: 8px;
     }}
     .notes {{
       color: var(--text-2);
-      font-size: 0.78rem;
-      line-height: 1.65;
-      padding: 10px 14px;
-      background: var(--border);
-      border-radius: 10px;
+      font-size: 0.76rem;
+      line-height: 1.7;
+      padding: 12px 16px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-weight: 400;
     }}
 
     /* ── Empty state ── */
     .empty-state {{
       text-align: center;
-      padding: 56px 24px;
+      padding: 64px 32px;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--r2);
@@ -675,39 +762,43 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     }}
     .empty-icon {{
       color: var(--text-3);
-      margin-bottom: 16px;
+      margin-bottom: 20px;
+      opacity: .45;
     }}
     .empty-state h2 {{
-      font-size: 1.1rem;
-      font-weight: 650;
-      margin-bottom: 6px;
+      font-size: 1.15rem;
+      font-weight: 680;
+      margin-bottom: 8px;
+      letter-spacing: -0.01em;
     }}
     .empty-state p {{
       color: var(--text-2);
-      font-size: 0.875rem;
+      font-size: 0.88rem;
+      font-weight: 400;
     }}
 
     /* ── Footer ── */
     footer {{
-      margin-top: 48px;
+      margin-top: 56px;
       padding-top: 24px;
       border-top: 1px solid var(--border);
       color: var(--text-3);
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       text-align: center;
       line-height: 1.7;
-      letter-spacing: 0.01em;
+      letter-spacing: 0.02em;
+      font-weight: 420;
     }}
 
     /* ── Mobile ── */
     @media (max-width: 600px) {{
-      .wrap {{ padding: 28px 18px 72px; }}
-      .hero h1 {{ font-size: 1.5rem; }}
-      .timeline {{ padding-left: 24px; }}
-      .tl-marker {{ left: -24px; }}
-      .tl-item::before {{ left: -17px; }}
-      .card {{ padding: 14px 15px; }}
-      .hero-next {{ flex-wrap: wrap; gap: 8px; padding: 12px 14px; }}
+      .wrap {{ padding: 32px 18px 72px; }}
+      .hero h1 {{ font-size: 1.65rem; }}
+      .timeline {{ padding-left: 20px; }}
+      .tl-marker {{ left: -20px; }}
+      .tl-item::before {{ left: -14px; }}
+      .card {{ padding: 15px 16px 15px 20px; border-radius: 14px; }}
+      .hero-next {{ flex-wrap: wrap; gap: 8px; padding: 14px 16px; }}
       .hero-next-title {{ width: 100%; order: 3; white-space: normal; }}
     }}
 
@@ -715,14 +806,24 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     @media print {{
       body {{ background: white; color: black; }}
       .card {{ box-shadow: none; border: 1px solid #ddd; break-inside: avoid; }}
+      .card::before {{ display: none; }}
       .pulse {{ animation: none; background: #34c759; }}
       .hero-next {{ box-shadow: none; }}
+      .fade-in {{ animation: none; opacity: 1; }}
+    }}
+
+    /* ── Reduce motion ── */
+    @media (prefers-reduced-motion: reduce) {{
+      .fade-in {{ animation: none; opacity: 1; }}
+      .pulse {{ animation: none; }}
+      .card {{ transition: none; }}
+      .dot {{ transition: none; }}
     }}
   </style>
 </head>
 <body>
   <main class="wrap">
-    <div class="hero">
+    <div class="hero fade-in">
       <h1>{_esc(TITLE)}</h1>
       <p class="hero-sub">Updated {_esc(human_updated(now))}</p>
       <div class="hero-chips">
