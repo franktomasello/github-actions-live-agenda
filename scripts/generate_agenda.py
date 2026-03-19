@@ -43,6 +43,12 @@ _RENDER_JS = r"""
   var _fmtHour = new Intl.DateTimeFormat('en', {
     timeZone: TZ, hour: 'numeric', hour12: false,
   });
+  var _fmtClock = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ, hour: 'numeric', minute: '2-digit', hour12: true,
+  });
+  var _fmtClockDate = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ, weekday: 'long', month: 'short', day: 'numeric',
+  });
 
   // ── HTML helpers ────────────────────────────────────────────────────────────
   function esc(s) {
@@ -184,6 +190,12 @@ _RENDER_JS = r"""
   function renderAll(events) {
     var now = new Date();
     events = events.filter(function (e) { return new Date(e.end) >= now; });
+
+    // Live clock
+    var clockTime = document.getElementById('clock-time');
+    var clockDate = document.getElementById('clock-date');
+    if (clockTime) clockTime.textContent = _fmtClock.format(now);
+    if (clockDate) clockDate.textContent = _fmtClockDate.format(now);
 
     // Event-count chip
     var chips = document.querySelectorAll('.chip');
@@ -723,6 +735,35 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       -webkit-text-fill-color: transparent;
       background-clip: text;
     }}
+    .hero-top {{
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }}
+    .clock {{
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      flex-shrink: 0;
+      padding-top: 4px;
+    }}
+    .clock-time {{
+      font-size: 1.6rem;
+      font-weight: 720;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }}
+    .clock-date {{
+      font-size: 0.72rem;
+      font-weight: 420;
+      color: var(--text-3);
+      margin-top: 4px;
+      letter-spacing: 0.005em;
+    }}
+
     .hero-chips {{
       display: flex;
       flex-wrap: wrap;
@@ -1160,6 +1201,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     @media (max-width: 600px) {{
       .wrap {{ padding: 32px 18px 72px; }}
       .hero h1 {{ font-size: 1.65rem; }}
+      .clock-time {{ font-size: 1.25rem; }}
       .timeline {{ padding-left: 20px; }}
       .tl-marker {{ left: -20px; }}
       .tl-item::before {{ left: -14px; }}
@@ -1237,7 +1279,13 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
 <body>
   <main class="wrap">
     <div class="hero fade-in">
-      <h1>{_esc(TITLE)}</h1>
+      <div class="hero-top">
+        <h1>{_esc(TITLE)}</h1>
+        <div class="clock" aria-live="polite" aria-label="Current time">
+          <span class="clock-time" id="clock-time"></span>
+          <span class="clock-date" id="clock-date"></span>
+        </div>
+      </div>
       <div class="hero-chips">
         <span class="chip">{WINDOW_HOURS}h window</span>
         <span class="chip">{_esc(TIMEZONE)}</span>
