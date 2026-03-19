@@ -31,7 +31,7 @@ ICS feed (Outlook / Reclaim / Google)
 - **Timeline UI** — events grouped by day with a vertical timeline, color-coded accent bars, and staggered fade-in animations
 - **Live indicators** — pulsing dot and "Now" / "In progress" badges for current events
 - **Dark / Light mode** — dark by default, toggle persisted in `localStorage`
-- **Auto-refresh** — page reloads every 5 minutes via `<meta http-equiv="refresh">`
+- **Auto-refresh** — page reloads every 2 minutes via `<meta http-equiv="refresh">`
 - **Responsive** — optimized for desktop, tablet, and mobile
 - **Glassmorphism** — frosted-glass cards with `backdrop-filter: blur()`
 - **Accessible** — `prefers-reduced-motion` support, semantic HTML, print styles
@@ -93,8 +93,10 @@ python scripts/generate_agenda.py
 open site/index.html
 ```
 
-## Triggering a rebuild
+## Auto-rebuild
 
-The site rebuilds automatically on every push. To rebuild without code changes:
+The site rebuilds automatically on every push **and** every 5 minutes via a scheduled deploy hook, so calendar changes appear within minutes.
+
+To manually trigger a rebuild:
 
 **Cloudflare Pages → Deployments → Retry deployment**
