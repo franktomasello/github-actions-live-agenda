@@ -249,17 +249,33 @@ _RENDER_JS = r"""
 
   function fetchAndUpdate() {
     fetch('/api/events')
-      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        var ct = r.headers.get('content-type') || '';
+        if (ct.indexOf('application/json') < 0) throw new Error('Not JSON: ' + ct);
+        return r.json();
+      })
       .then(function (data) {
         var events = data.events || [];
         var s = sig(events);
         currentData = events;
         if (s !== currentSig) { currentSig = s; renderAll(events); }
       })
-      .catch(function () {});
+      .catch(function (err) {
+        console.warn('[agenda] fetch failed:', err.message || err);
+      });
+  }
+
+  // ── Bootstrap from build-time JSON if available ─────────────────────────────
+  function initFromBuildData() {
+    if (window.__AGENDA_EVENTS__) {
+      currentData = window.__AGENDA_EVENTS__;
+      currentSig = sig(currentData);
+    }
   }
 
   // ── Init ────────────────────────────────────────────────────────────────────
+  initFromBuildData();
   fetchAndUpdate();
   setInterval(fetchAndUpdate, POLL_MS);
   setInterval(tick, TICK_MS);
@@ -440,6 +456,24 @@ def _event_accent(event: Event) -> str:
     if h < 17:
         return "#007aff"  # blue afternoon
     return "#5e5ce6"  # indigo evening
+
+
+def _build_events_json(events: list[Event]) -> str:
+    """Serialize events to JSON for client-side bootstrap."""
+    return json.dumps(
+        [
+            {
+                "title": e.title,
+                "start": e.start.isoformat(),
+                "end": e.end.isoformat(),
+                "location": e.location,
+                "description": e.description,
+                "isAllDay": e.is_all_day,
+            }
+            for e in events
+        ],
+        separators=(",", ":"),
+    )
 
 
 def render(events: Iterable[Event], tz: ZoneInfo) -> str:
@@ -1234,6 +1268,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
   <script>
   window.__AGENDA_TZ__ = {json.dumps(TIMEZONE)};
   window.__AGENDA_WINDOW_HOURS__ = {WINDOW_HOURS};
+  window.__AGENDA_EVENTS__ = {_build_events_json(event_list)};
   </script>
   <script>{_RENDER_JS}</script>
 </body>
