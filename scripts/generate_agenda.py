@@ -313,9 +313,32 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     /* ── Reset ── */
     *,*::before,*::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
 
-    /* ── Tokens ── */
+    /* ── Tokens — dark default ── */
     :root {{
-      color-scheme: light dark;
+      color-scheme: dark;
+      --bg:        #000000;
+      --surface:   rgba(28,28,30,.92);
+      --surface-2: rgba(44,44,46,.6);
+      --text:      #f5f5f7;
+      --text-2:    #98989d;
+      --text-3:    #636366;
+      --accent:    #0a84ff;
+      --accent-bg: rgba(10,132,255,.14);
+      --live:      #30d158;
+      --live-bg:   rgba(48,209,88,.1);
+      --live-text: #32d74b;
+      --border:    rgba(255,255,255,.04);
+      --border-2:  rgba(255,255,255,.07);
+      --tl-line:   rgba(255,255,255,.06);
+      --card-shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.2);
+      --card-hover: 0 2px 6px rgba(0,0,0,.5), 0 12px 28px rgba(0,0,0,.3);
+      --r:  16px;
+      --r2: 22px;
+    }}
+
+    /* ── Light override ── */
+    [data-theme="light"] {{
+      color-scheme: light;
       --bg:        #f2f2f7;
       --surface:   #ffffff;
       --surface-2: #f8f8fa;
@@ -332,29 +355,6 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       --tl-line:   rgba(0,0,0,.06);
       --card-shadow: 0 1px 2px rgba(0,0,0,.03), 0 4px 16px rgba(0,0,0,.04);
       --card-hover: 0 2px 6px rgba(0,0,0,.05), 0 12px 28px rgba(0,0,0,.07);
-      --r:  16px;
-      --r2: 22px;
-    }}
-
-    @media (prefers-color-scheme: dark) {{
-      :root {{
-        --bg:        #000000;
-        --surface:   rgba(28,28,30,.92);
-        --surface-2: rgba(44,44,46,.6);
-        --text:      #f5f5f7;
-        --text-2:    #98989d;
-        --text-3:    #636366;
-        --accent:    #0a84ff;
-        --accent-bg: rgba(10,132,255,.14);
-        --live:      #30d158;
-        --live-bg:   rgba(48,209,88,.1);
-        --live-text: #32d74b;
-        --border:    rgba(255,255,255,.04);
-        --border-2:  rgba(255,255,255,.07);
-        --tl-line:   rgba(255,255,255,.06);
-        --card-shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.2);
-        --card-hover: 0 2px 6px rgba(0,0,0,.5), 0 12px 28px rgba(0,0,0,.3);
-      }}
     }}
 
     /* ── Animations ── */
@@ -812,12 +812,57 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .fade-in {{ animation: none; opacity: 1; }}
     }}
 
+    /* ── Theme toggle ── */
+    .theme-toggle {{
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 100;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 1px solid var(--border-2);
+      background: var(--surface);
+      box-shadow: 0 2px 12px rgba(0,0,0,.15), 0 1px 3px rgba(0,0,0,.1);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      transition: transform .3s cubic-bezier(.22,1,.36,1), box-shadow .3s ease, background .3s ease;
+      -webkit-tap-highlight-color: transparent;
+    }}
+    .theme-toggle:hover {{
+      transform: scale(1.08);
+      box-shadow: 0 4px 20px rgba(0,0,0,.2), 0 2px 6px rgba(0,0,0,.12);
+    }}
+    .theme-toggle:active {{
+      transform: scale(.95);
+    }}
+    .theme-toggle svg {{
+      width: 20px;
+      height: 20px;
+      color: var(--text-2);
+      transition: transform .5s cubic-bezier(.22,1,.36,1), opacity .3s ease;
+    }}
+    .theme-toggle .icon-sun {{ position: absolute; opacity: 0; transform: rotate(-90deg) scale(.5); }}
+    .theme-toggle .icon-moon {{ position: absolute; opacity: 1; transform: rotate(0) scale(1); }}
+    [data-theme="light"] .theme-toggle .icon-sun {{ opacity: 1; transform: rotate(0) scale(1); }}
+    [data-theme="light"] .theme-toggle .icon-moon {{ opacity: 0; transform: rotate(90deg) scale(.5); }}
+
+    @media (max-width: 600px) {{
+      .theme-toggle {{ bottom: 18px; right: 18px; width: 42px; height: 42px; }}
+      .theme-toggle svg {{ width: 18px; height: 18px; }}
+    }}
+
     /* ── Reduce motion ── */
     @media (prefers-reduced-motion: reduce) {{
       .fade-in {{ animation: none; opacity: 1; }}
       .pulse {{ animation: none; }}
       .card {{ transition: none; }}
       .dot {{ transition: none; }}
+      .theme-toggle, .theme-toggle svg {{ transition: none; }}
     }}
   </style>
 </head>
@@ -838,6 +883,24 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       Auto-refreshes every 5&nbsp;min &middot; Rebuilt by GitHub&nbsp;Actions
     </footer>
   </main>
+  <button class="theme-toggle" aria-label="Toggle light/dark mode" title="Toggle theme">
+    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+  </button>
+  <script>
+  (function(){{
+    var KEY='agenda-theme';
+    var root=document.documentElement;
+    var saved=localStorage.getItem(KEY);
+    if(saved==='light')root.setAttribute('data-theme','light');
+    var btn=document.querySelector('.theme-toggle');
+    btn.addEventListener('click',function(){{
+      var isLight=root.getAttribute('data-theme')==='light';
+      if(isLight){{root.removeAttribute('data-theme');localStorage.setItem(KEY,'dark');}}
+      else{{root.setAttribute('data-theme','light');localStorage.setItem(KEY,'light');}}
+    }});
+  }})();
+  </script>
 </body>
 </html>
 """
