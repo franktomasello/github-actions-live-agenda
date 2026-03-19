@@ -25,6 +25,21 @@ class Event:
     is_all_day: bool
 
 
+@dataclass(slots=True)
+class GitHubMention:
+    title: str
+    repo: str
+    number: int
+    url: str
+    state: str
+    is_pr: bool
+    author: str
+    labels: list[str]
+    updated: datetime
+    created: datetime
+    comments: int
+
+
 def env(name: str, default: str | None = None, required: bool = False) -> str:
     value = os.getenv(name, default)
     if required and not value:
@@ -37,6 +52,9 @@ TIMEZONE = env("AGENDA_TIMEZONE", "America/Los_Angeles")
 TITLE = env("AGENDA_TITLE", "Live Agenda")
 WINDOW_HOURS = int(env("WINDOW_HOURS", "48"))
 MAX_EVENTS = int(env("MAX_EVENTS", "40"))
+GITHUB_TOKEN = env("GITHUB_TOKEN")
+GITHUB_USERNAME = env("GITHUB_USERNAME")
+MAX_MENTIONS = int(env("MAX_MENTIONS", "15"))
 SITE_DIR = Path(env("SITE_DIR", "site"))
 SITE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -59,6 +77,75 @@ def fetch_ics(url: str) -> bytes:
         raise SystemExit(f"Failed to fetch ICS feed: HTTP {exc.code}") from exc
     except URLError as exc:
         raise SystemExit(f"Failed to fetch ICS feed: {exc.reason}") from exc
+
+
+def fetch_github_mentions(token: str, username: str, tz: ZoneInfo) -> list[GitHubMention]:
+    """Fetch open issues/PRs where the user is @mentioned."""
+    if not token or not username:
+        return []
+
+    query = f"mentions:{username} is:open is:issue sort:updated-desc"
+    api_url = f"https://api.github.com/search/issues?q={query}&per_page={MAX_MENTIONS}"
+    req = Request(
+        api_url,
+        headers={
+            "User-Agent": "github-actions-live-agenda/1.0",
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+        method="GET",
+    )
+    try:
+        with urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+    except (HTTPError, URLError) as exc:
+        print(f"Warning: GitHub API request failed: {exc}", file=sys.stderr)
+        return []
+
+    mentions: list[GitHubMention] = []
+    for item in data.get("items", []):
+        repo_url = item.get("repository_url", "")
+        repo = "/".join(repo_url.rsplit("/", 2)[-2:]) if repo_url else ""
+        is_pr = "pull_request" in item
+        updated = datetime.fromisoformat(item["updated_at"].replace("Z", "+00:00")).astimezone(tz)
+        created = datetime.fromisoformat(item["created_at"].replace("Z", "+00:00")).astimezone(tz)
+
+        mentions.append(
+            GitHubMention(
+                title=item.get("title", "Untitled"),
+                repo=repo,
+                number=item.get("number", 0),
+                url=item.get("html_url", ""),
+                state=item.get("state", "open"),
+                is_pr=is_pr,
+                author=item.get("user", {}).get("login", ""),
+                labels=[l.get("name", "") for l in item.get("labels", [])],
+                updated=updated,
+                created=created,
+                comments=item.get("comments", 0),
+            )
+        )
+
+    return mentions
+
+
+def _time_ago(dt: datetime, now: datetime) -> str:
+    """Return human-friendly relative time like '2h ago' or '3d ago'."""
+    diff = now - dt
+    total_min = int(diff.total_seconds() // 60)
+    if total_min < 1:
+        return "just now"
+    if total_min < 60:
+        return f"{total_min}m ago"
+    hours = total_min // 60
+    if hours < 24:
+        return f"{hours}h ago"
+    days = hours // 24
+    if days < 30:
+        return f"{days}d ago"
+    months = days // 30
+    return f"{months}mo ago"
 
 
 def ensure_dt(value: date | datetime, tz: ZoneInfo) -> tuple[datetime, bool]:
@@ -188,7 +275,97 @@ def _event_accent(event: Event) -> str:
     return "#5e5ce6"  # indigo evening
 
 
-def render(events: Iterable[Event], tz: ZoneInfo) -> str:
+def render_github_section(mentions: list[GitHubMention], now: datetime, start_idx: int) -> tuple[str, int]:
+    """Render the GitHub mentions section. Returns (html, next_global_idx)."""
+    if not mentions:
+        return "", start_idx
+
+    idx = start_idx
+    cards: list[str] = []
+    for i, m in enumerate(mentions):
+        is_last = i == len(mentions) - 1
+        last_class = " is-last" if is_last else ""
+        delay = f' style="animation-delay:{idx * 40}ms"'
+        idx += 1
+
+        type_icon = (
+            '<svg class="gh-type-icon" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">'
+            '<path d="M7.177 3.073L9.573.677A.25.25 0 0110 .854v4.792a.25.25 0 01-.427.177L7.177 3.427a.25.25 0 010-.354zM3.75 '
+            '2.5a.75.75 0 100 1.5.75.75 0 000-1.5zm-2.25.75a2.25 2.25 0 113 2.122v5.256a2.251 2.251 0 11-1.5 0V5.372A2.25 '
+            '2.25 0 011.5 3.25zM11 2.5h-1V4h1a1 1 0 011 1v5.628a2.251 2.251 0 101.5 0V5A2.5 2.5 0 0011 2.5zm1 '
+            '10.25a.75.75 0 111.5 0 .75.75 0 01-1.5 0zM3.75 12a.75.75 0 100 1.5.75.75 0 000-1.5z"/></svg>'
+            if m.is_pr
+            else '<svg class="gh-type-icon" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">'
+            '<path d="M8 9.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>'
+            '<path d="M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0z"/></svg>'
+        )
+        type_label = "PR" if m.is_pr else "Issue"
+
+        label_html = ""
+        if m.labels:
+            label_chips = "".join(
+                f'<span class="gh-label">{_esc(l)}</span>' for l in m.labels[:3]
+            )
+            label_html = f'<div class="gh-labels">{label_chips}</div>'
+
+        comments_html = ""
+        if m.comments > 0:
+            comments_html = (
+                f'<span class="gh-comments">'
+                f'<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">'
+                f'<path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0113.25 12H9.06l-2.573 '
+                f'2.573A1.458 1.458 0 014 13.543V12H2.75A1.75 1.75 0 011 10.25v-7.5z"/></svg>'
+                f'{m.comments}</span>'
+            )
+
+        updated_ago = _time_ago(m.updated, now)
+
+        cards.append(
+            f'<div class="tl-item{last_class} fade-in"{delay}>'
+            f'<div class="tl-marker"><span class="dot gh-dot"></span></div>'
+            f'<a href="{_esc(m.url)}" target="_blank" rel="noopener" class="card gh-card" style="--accent-bar:#8b5cf6">'
+            f'<div class="card-top">'
+            f'<div class="gh-meta">'
+            f'{type_icon}'
+            f'<span class="gh-repo">{_esc(m.repo)}</span>'
+            f'<span class="gh-number">#{m.number}</span>'
+            f'</div>'
+            f'<div class="card-meta-right">'
+            f'<span class="gh-type-badge gh-type-{type_label.lower()}">{type_label}</span>'
+            f'{comments_html}'
+            f'</div>'
+            f'</div>'
+            f'<h3>{_esc(m.title)}</h3>'
+            f'<div class="gh-footer">'
+            f'<span class="gh-author">@{_esc(m.author)}</span>'
+            f'<span class="gh-updated">updated {updated_ago}</span>'
+            f'</div>'
+            f'{label_html}'
+            f'</a>'
+            f'</div>'
+        )
+
+    section = (
+        f'<section class="day-group gh-section">'
+        f'<div class="day-head gh-head">'
+        f'<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="opacity:.6">'
+        f'<path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 01-5.45 7.59c-.4.08-.55-.17-.55-.38 '
+        f'0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 '
+        f'0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 '
+        f'0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 '
+        f'1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.58.93.65 '
+        f'1.16.13.42.55 1.2 1.07 1.21 0 .83.01 1.2.01 1.2 0 .21-.15.46-.55.38A8.013 8.013 0 010 8c0-4.42 3.58-8 8-8z"/>'
+        f'</svg>'
+        f'<h2>Mentions</h2>'
+        f'<span class="cnt">{len(mentions)}</span>'
+        f'</div>'
+        f'<div class="timeline">{"".join(cards)}</div>'
+        f'</section>'
+    )
+    return section, idx
+
+
+def render(events: Iterable[Event], tz: ZoneInfo, mentions: list[GitHubMention] | None = None) -> str:
     now = datetime.now(tz)
     event_list = list(events)
     grouped: dict[str, list[Event]] = {}
@@ -279,6 +456,11 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
                 f'<div class="timeline">{"".join(cards)}</div>'
                 f"</section>"
             )
+
+    # ── GitHub mentions section ──
+    gh_html = ""
+    if mentions:
+        gh_html, global_idx = render_github_section(mentions, now, global_idx)
 
     total_events = len(event_list)
     next_event = event_list[0] if event_list else None
@@ -751,6 +933,134 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       font-weight: 400;
     }}
 
+    /* ── GitHub mentions ── */
+    .gh-section {{
+      margin-top: 48px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+    }}
+    .gh-head svg {{
+      color: var(--text-2);
+    }}
+    .gh-head h2 {{
+      color: #8b5cf6 !important;
+    }}
+    .gh-chip {{
+      background: rgba(139,92,246,.12);
+      color: #8b5cf6;
+    }}
+    .gh-card {{
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
+    }}
+    .gh-card:hover {{
+      border-color: rgba(139,92,246,.25);
+    }}
+    .gh-card:hover::before {{
+      opacity: 1;
+    }}
+    .gh-dot {{
+      box-shadow: 0 0 0 1.5px rgba(139,92,246,.3) !important;
+    }}
+    .gh-meta {{
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      overflow: hidden;
+    }}
+    .gh-type-icon {{
+      color: var(--text-3);
+      flex-shrink: 0;
+    }}
+    .gh-repo {{
+      font-size: 0.72rem;
+      color: var(--text-2);
+      font-weight: 520;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }}
+    .gh-number {{
+      font-size: 0.72rem;
+      color: var(--text-3);
+      font-weight: 480;
+      flex-shrink: 0;
+    }}
+    .gh-type-badge {{
+      font-size: 0.6rem;
+      font-weight: 680;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 3px 8px;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }}
+    .gh-type-pr {{
+      background: rgba(139,92,246,.1);
+      color: #a78bfa;
+    }}
+    .gh-type-issue {{
+      background: rgba(34,197,94,.1);
+      color: #4ade80;
+    }}
+    [data-theme="light"] .gh-type-pr {{
+      background: rgba(139,92,246,.08);
+      color: #7c3aed;
+    }}
+    [data-theme="light"] .gh-type-issue {{
+      background: rgba(34,197,94,.08);
+      color: #16a34a;
+    }}
+    .gh-comments {{
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 0.68rem;
+      color: var(--text-3);
+      font-weight: 500;
+    }}
+    .gh-comments svg {{
+      opacity: .5;
+    }}
+    .gh-card h3 {{
+      margin-top: 2px;
+    }}
+    .gh-footer {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 4px;
+    }}
+    .gh-author {{
+      font-size: 0.72rem;
+      color: var(--accent);
+      font-weight: 540;
+    }}
+    .gh-updated {{
+      font-size: 0.68rem;
+      color: var(--text-3);
+      font-weight: 420;
+    }}
+    .gh-labels {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 8px;
+    }}
+    .gh-label {{
+      font-size: 0.62rem;
+      font-weight: 580;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: var(--text-2);
+      border: 1px solid var(--border);
+      letter-spacing: 0.01em;
+    }}
+
     /* ── Empty state ── */
     .empty-state {{
       text-align: center;
@@ -875,10 +1185,12 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
         <span class="chip">{WINDOW_HOURS}h window</span>
         <span class="chip">{_esc(TIMEZONE)}</span>
         <span class="chip">{total_events} event{"s" if total_events != 1 else ""}</span>
+        {'<span class="chip gh-chip">' + str(len(mentions)) + ' mention' + ('s' if len(mentions) != 1 else '') + '</span>' if mentions else ''}
       </div>
       {hero_next}
     </div>
     {''.join(sections)}
+    {gh_html}
     <footer>
       Auto-refreshes every 5&nbsp;min &middot; Rebuilt on push via Cloudflare&nbsp;Pages
     </footer>
@@ -925,7 +1237,8 @@ if __name__ == "__main__":
     tz = ZoneInfo(TIMEZONE)
     raw = fetch_ics(ICS_URL)
     events = parse_events(raw, tz)
-    html_doc = render(events, tz)
+    mentions = fetch_github_mentions(GITHUB_TOKEN, GITHUB_USERNAME, tz)
+    html_doc = render(events, tz, mentions=mentions)
     (SITE_DIR / "index.html").write_text(html_doc, encoding="utf-8")
     write_json(events)
-    print(f"Wrote {len(events)} event(s) to {SITE_DIR / 'index.html'}")
+    print(f"Wrote {len(events)} event(s) and {len(mentions)} mention(s) to {SITE_DIR / 'index.html'}")
