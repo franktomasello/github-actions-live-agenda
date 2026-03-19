@@ -1,14 +1,8 @@
 /**
  * Cloudflare Pages Function — /api/events
  *
- * Fetches the Outlook ICS URL on every request and returns filtered,
- * parsed events as JSON. No caching — always live data.
- *
- * Environment variables (same ones the Python build uses):
- *   ICS_URL            required
- *   AGENDA_TIMEZONE    default: America/Los_Angeles
- *   WINDOW_HOURS       default: 48
- *   MAX_EVENTS         default: 40
+ * Fetches the ICS feed on each request and returns parsed events as JSON.
+ * Short edge cache (10s) prevents hammering the ICS source on rapid polls.
  */
 export async function onRequestGet(context) {
   const { env } = context;
@@ -17,9 +11,9 @@ export async function onRequestGet(context) {
     return json({ error: 'ICS_URL not configured' }, 500);
   }
 
-  const timezone   = env.AGENDA_TIMEZONE || 'America/Los_Angeles';
-  const windowHrs  = parseInt(env.WINDOW_HOURS || '48', 10);
-  const maxEvents  = parseInt(env.MAX_EVENTS  || '40',  10);
+  const timezone  = env.AGENDA_TIMEZONE || 'America/Los_Angeles';
+  const windowHrs = parseInt(env.WINDOW_HOURS || '48', 10);
+  const maxEvents = parseInt(env.MAX_EVENTS  || '40',  10);
 
   let icsText;
   try {
@@ -36,36 +30,47 @@ export async function onRequestGet(context) {
   }
 
   const events = parseICS(icsText, timezone, windowHrs, maxEvents);
-  return json({ events, timezone, generatedAt: new Date().toISOString() });
+  return json(
+    { events, timezone, generatedAt: new Date().toISOString() },
+    200,
+    { 'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=20' },
+  );
 }
 
 // ── JSON helper ──────────────────────────────────────────────────────────────
 
-function json(body, status = 200) {
+function json(body, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       'Content-Type': 'application/json',
-      'Cache-Control': 'no-store',
+      ...extraHeaders,
     },
   });
 }
 
 // ── Timezone conversion ──────────────────────────────────────────────────────
 
-/**
- * Convert a local date/time expressed in `tz` to a UTC Date object.
- * Uses the "probe then correct" technique — valid for all IANA timezones.
- */
-function localToUTC(y, mo, d, h, m, s, tz) {
-  const probe = new Date(Date.UTC(y, mo, d, h, m, s));
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en', {
+// Cache DateTimeFormat instances keyed by timezone (expensive to construct).
+const _fmtCache = new Map();
+function getFmt(tz) {
+  let f = _fmtCache.get(tz);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en', {
       timeZone: tz,
       year: 'numeric', month: 'numeric', day: 'numeric',
       hour: 'numeric', minute: 'numeric', second: 'numeric',
       hour12: false,
-    }).formatToParts(probe).map(p => [p.type, p.value])
+    });
+    _fmtCache.set(tz, f);
+  }
+  return f;
+}
+
+function localToUTC(y, mo, d, h, m, s, tz) {
+  const probe = new Date(Date.UTC(y, mo, d, h, m, s));
+  const parts = Object.fromEntries(
+    getFmt(tz).formatToParts(probe).map(p => [p.type, p.value])
   );
   const probeAsLocal = Date.UTC(
     +parts.year, +parts.month - 1, +parts.day,
@@ -104,21 +109,22 @@ const decode = s => s
   .replace(/\\;/g, ';').replace(/\\\\/g, '\\');
 
 function parseICS(text, timezone, windowHours, maxEvents) {
-  // RFC 5545 line unfolding
-  const unfolded = text
-    .replace(/\r\n[ \t]/g, '')
-    .replace(/\r\n/g, '\n')
-    .replace(/\n[ \t]/g, '');
+  // RFC 5545 line unfolding — single pass
+  const unfolded = text.replace(/\r\n/g, '\n').replace(/\n[ \t]/g, '');
 
   const now       = new Date();
   const windowEnd = new Date(now.getTime() + windowHours * 3_600_000);
   const events    = [];
 
-  for (const block of unfolded.split(/BEGIN:VEVENT\n?/).slice(1)) {
-    const content = block.slice(0, block.indexOf('END:VEVENT') >>> 0 || block.length);
+  const blocks = unfolded.split('BEGIN:VEVENT');
+  for (let bi = 1; bi < blocks.length; bi++) {
+    const endIdx = blocks[bi].indexOf('END:VEVENT');
+    const content = endIdx >= 0 ? blocks[bi].slice(0, endIdx) : blocks[bi];
 
     const props = new Map();
-    for (const line of content.split('\n')) {
+    const lines = content.split('\n');
+    for (let li = 0; li < lines.length; li++) {
+      const line = lines[li];
       const ci = line.indexOf(':');
       if (ci < 0) continue;
       const keyPart = line.slice(0, ci);
@@ -136,8 +142,8 @@ function parseICS(text, timezone, windowHours, maxEvents) {
     const { dt: start, isAllDay } = parseDatetime(dts.value, dts.params, timezone);
     if (!start) continue;
 
-    const dte  = props.get('DTEND');
-    const end  = dte
+    const dte = props.get('DTEND');
+    const end = dte
       ? parseDatetime(dte.value, dte.params, timezone).dt
       : new Date(start.getTime() + (isAllDay ? 86_400_000 : 3_600_000));
 
@@ -154,8 +160,8 @@ function parseICS(text, timezone, windowHours, maxEvents) {
   }
 
   events.sort((a, b) =>
-    a.start.localeCompare(b.start) ||
-    a.end.localeCompare(b.end)     ||
+    a.start < b.start ? -1 : a.start > b.start ? 1 :
+    a.end   < b.end   ? -1 : a.end   > b.end   ? 1 :
     a.title.toLowerCase().localeCompare(b.title.toLowerCase())
   );
   return events.slice(0, maxEvents);

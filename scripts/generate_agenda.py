@@ -16,19 +16,37 @@ from zoneinfo import ZoneInfo
 
 # ── Client-side renderer ──────────────────────────────────────────────────────
 # Raw string so normal JS braces don't need escaping in the f-string template.
-# Injected after a small <script> block that sets __AGENDA_TZ__ and
-# __AGENDA_WINDOW_HOURS__ from the Python build-time env vars.
 _RENDER_JS = r"""
 (function () {
   'use strict';
   var TZ           = window.__AGENDA_TZ__;
   var WINDOW_HOURS = window.__AGENDA_WINDOW_HOURS__;
-  var POLL_MS      = 30_000;   // fetch fresh data from /api/events every 30 s
-  var TICK_MS      = 60_000;   // re-render countdowns every 60 s
+  var POLL_MS      = 30000;
+  var TICK_MS      = 15000;
 
-  var currentSig   = null;     // JSON signature of last-seen event list
-  var currentData  = null;     // last-seen event array
-  var tickTimer    = null;
+  var currentSig   = null;
+  var currentData  = null;
+
+  // ── Cached formatters (Intl.DateTimeFormat is expensive to construct) ──────
+  var _fmtTime = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ, hour: 'numeric', minute: '2-digit', hour12: true,
+  });
+  var _fmtDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+  });
+  var _fmtSection = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ, weekday: 'long', month: 'short', day: 'numeric',
+  });
+  var _fmtLongDate = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ, month: 'long', day: 'numeric', year: 'numeric',
+  });
+  var _fmtUpdated = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ, weekday: 'long', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short',
+  });
+  var _fmtHour = new Intl.DateTimeFormat('en', {
+    timeZone: TZ, hour: 'numeric', hour12: false,
+  });
 
   // ── HTML helpers ────────────────────────────────────────────────────────────
   function esc(s) {
@@ -38,16 +56,11 @@ _RENDER_JS = r"""
   }
 
   // ── Time helpers ────────────────────────────────────────────────────────────
-  function fmtTime(isoStr) {
-    return new Intl.DateTimeFormat('en-US', {
-      timeZone: TZ, hour: 'numeric', minute: '2-digit', hour12: true,
-    }).format(new Date(isoStr));
-  }
-
+  function fmtTime(iso) { return _fmtTime.format(new Date(iso)); }
   function fmtTimeRange(s, e) { return fmtTime(s) + ' \u2013 ' + fmtTime(e); }
 
   function durStr(s, e) {
-    var m = Math.round((new Date(e) - new Date(s)) / 60_000);
+    var m = Math.round((new Date(e) - new Date(s)) / 60000);
     if (m < 60) return m + 'm';
     var h = Math.floor(m / 60), r = m % 60;
     return r ? h + 'h ' + r + 'm' : h + 'h';
@@ -57,7 +70,7 @@ _RENDER_JS = r"""
     if (isAllDay) return '';
     var start = new Date(s), end = new Date(e);
     if (end < now) return '';
-    var diff = Math.floor((start - now) / 60_000);
+    var diff = Math.floor((start - now) / 60000);
     if (diff < -5)  return 'In progress';
     if (diff <= 0)  return 'Now';
     if (diff < 60)  return 'in ' + diff + ' min';
@@ -67,25 +80,18 @@ _RENDER_JS = r"""
 
   function accent(s, isAllDay) {
     if (isAllDay) return '#af52de';
-    var h = +new Intl.DateTimeFormat('en', {
-      timeZone: TZ, hour: 'numeric', hour12: false,
-    }).format(new Date(s)) % 24;
+    var h = +_fmtHour.format(new Date(s)) % 24;
     return h < 12 ? '#ff9f0a' : h < 17 ? '#007aff' : '#5e5ce6';
   }
 
-  var _dateFmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
-  });
-  function localDate(isoStr) { return _dateFmt.format(new Date(isoStr)); }
+  function localDate(iso) { return _fmtDate.format(new Date(iso)); }
 
   function sectionTitle(s, now) {
     var d = localDate(s), t = localDate(now.toISOString());
-    var tmr = localDate(new Date(now.getTime() + 86_400_000).toISOString());
+    var tmr = localDate(new Date(now.getTime() + 86400000).toISOString());
     if (d === t)   return 'Today';
     if (d === tmr) return 'Tomorrow';
-    return new Intl.DateTimeFormat('en-US', {
-      timeZone: TZ, weekday: 'long', month: 'short', day: 'numeric',
-    }).format(new Date(s));
+    return _fmtSection.format(new Date(s));
   }
 
   // ── SVG icons ───────────────────────────────────────────────────────────────
@@ -133,9 +139,7 @@ _RENDER_JS = r"""
       idx++;
     }
     var dateSub = (!isToday && heading !== 'Tomorrow' && evts.length > 0)
-      ? '<span class="day-date">' + esc(new Intl.DateTimeFormat('en-US', {
-          timeZone: TZ, month: 'long', day: 'numeric', year: 'numeric',
-        }).format(new Date(evts[0].start))) + '</span>'
+      ? '<span class="day-date">' + esc(_fmtLongDate.format(new Date(evts[0].start))) + '</span>'
       : '';
     return {
       html: '<section class="day-group">'
@@ -150,17 +154,12 @@ _RENDER_JS = r"""
   // ── Full DOM update ─────────────────────────────────────────────────────────
   function renderAll(events) {
     var now = new Date();
-
-    // Filter out events that ended since the last fetch
     events = events.filter(function (e) { return new Date(e.end) >= now; });
 
     // Hero "Updated" line
     var sub = document.querySelector('.hero-sub');
     if (sub) {
-      var tp = new Intl.DateTimeFormat('en-US', {
-        timeZone: TZ, weekday: 'long', month: 'short', day: 'numeric',
-        hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short',
-      }).formatToParts(now);
+      var tp = _fmtUpdated.formatToParts(now);
       var get = function (type) { return (tp.find(function (p) { return p.type === type; }) || {}).value || ''; };
       sub.textContent = 'Updated ' + get('weekday') + ', ' + get('month') + ' ' + get('day')
         + ' at ' + get('hour') + ':' + get('minute') + ' ' + get('dayPeriod') + ' ' + get('timeZoneName');
@@ -214,38 +213,78 @@ _RENDER_JS = r"""
     }
   }
 
+  // ── Lightweight tick — only update countdowns + badges, skip full re-render ─
+  function tick() {
+    if (!currentData) return;
+    var now = new Date();
+
+    // Update hero next-up ETA
+    var heroWrap = document.getElementById('hero-next-wrap');
+    if (heroWrap && currentData.length > 0) {
+      var next = currentData.filter(function (e) { return new Date(e.end) >= now; })[0];
+      if (next) {
+        var rel = timeUntil(next.start, next.end, next.isAllDay, now);
+        var isNow = rel === 'Now' || rel === 'In progress';
+        var eta = heroWrap.querySelector('.hero-eta, .hero-live');
+        if (eta) eta.textContent = rel;
+        var label = heroWrap.querySelector('.hero-next-label');
+        if (label) label.textContent = isNow ? 'Live' : 'Next';
+      }
+    }
+
+    // Update countdown spans and badges in-place
+    var items = document.querySelectorAll('.tl-item');
+    var dataIdx = 0;
+    var live = currentData.filter(function (e) { return new Date(e.end) >= now; });
+    for (var i = 0; i < items.length && dataIdx < live.length; i++) {
+      var ev = live[dataIdx++];
+      var rel = timeUntil(ev.start, ev.end, ev.isAllDay, now);
+      var cd = items[i].querySelector('.countdown');
+      if (cd) cd.textContent = rel;
+      var badge = items[i].querySelector('.badge.live');
+      if (badge) badge.textContent = rel;
+    }
+
+    // Update "Updated" timestamp
+    var sub = document.querySelector('.hero-sub');
+    if (sub) {
+      var tp = _fmtUpdated.formatToParts(now);
+      var get = function (type) { return (tp.find(function (p) { return p.type === type; }) || {}).value || ''; };
+      sub.textContent = 'Updated ' + get('weekday') + ', ' + get('month') + ' ' + get('day')
+        + ' at ' + get('hour') + ':' + get('minute') + ' ' + get('dayPeriod') + ' ' + get('timeZoneName');
+    }
+  }
+
   // ── Data fetching & polling ─────────────────────────────────────────────────
   function sig(events) {
-    return JSON.stringify(events.map(function (e) {
-      return e.title + '|' + e.start + '|' + e.end + '|' + e.location;
-    }));
+    var s = '';
+    for (var i = 0; i < events.length; i++) {
+      s += events[i].title + '|' + events[i].start + '|' + events[i].end + '\n';
+    }
+    return s;
   }
 
   function fetchAndUpdate() {
-    fetch('/api/events?_=' + Date.now())
+    fetch('/api/events')
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(function (data) {
         var events = data.events || [];
         var s = sig(events);
-        var changed = s !== currentSig;
-        currentSig  = s;
         currentData = events;
-        if (changed) renderAll(events);
+        if (s !== currentSig) { currentSig = s; renderAll(events); }
       })
-      .catch(function () {}); // silently ignore transient errors
+      .catch(function () {});
   }
 
-  function tick() {
-    // Re-render existing data so countdowns stay accurate between fetches
-    if (currentData) renderAll(currentData);
-  }
-
-  // Initial render immediately, then poll every 30 s
+  // ── Init ────────────────────────────────────────────────────────────────────
   fetchAndUpdate();
   setInterval(fetchAndUpdate, POLL_MS);
+  setInterval(tick, TICK_MS);
 
-  // Re-render countdowns every minute without fetching
-  tickTimer = setInterval(tick, TICK_MS);
+  // Fetch immediately when tab becomes visible (user switches back)
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) fetchAndUpdate();
+  });
 })();
 """
 
@@ -539,9 +578,15 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#000000" id="tc">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>">
   <title>{_esc(TITLE)}</title>
+  <script>
+  (function(){{var s=localStorage.getItem('agenda-theme');if(s==='light'){{document.documentElement.setAttribute('data-theme','light');document.getElementById('tc').content='#f2f2f7';}}}})();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" as="style">
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
   <style>
     /* ── Reset ── */
@@ -722,6 +767,8 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     /* ── Day groups ── */
     .day-group {{
       margin-bottom: 40px;
+      content-visibility: auto;
+      contain-intrinsic-size: auto 400px;
     }}
     .day-group:last-of-type {{
       margin-bottom: 0;
@@ -734,12 +781,10 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       padding-left: 2px;
     }}
     .day-head h2 {{
-      font-size: 0.98rem;
+      font-size: 0.72rem;
       font-weight: 700;
-      letter-spacing: -0.01em;
       text-transform: uppercase;
       letter-spacing: 0.04em;
-      font-size: 0.72rem;
       color: var(--text-2);
     }}
     .day-head.is-today h2 {{
@@ -834,6 +879,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       overflow: hidden;
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
+      contain: layout style paint;
     }}
     /* Left accent bar */
     .card::before {{
@@ -1114,7 +1160,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     </div>
     <div id="agenda-events">{''.join(sections)}</div>
     <footer>
-      Live data &middot; Updates every&nbsp;30&nbsp;s
+      Live data &middot; Updates every&nbsp;30&nbsp;s &middot; Powered by Cloudflare&nbsp;Pages
     </footer>
   </main>
   <button class="theme-toggle" aria-label="Toggle light/dark mode" title="Toggle theme">
@@ -1123,15 +1169,12 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
   </button>
   <script>
   (function(){{
-    var KEY='agenda-theme';
-    var root=document.documentElement;
-    var saved=localStorage.getItem(KEY);
-    if(saved==='light')root.setAttribute('data-theme','light');
+    var KEY='agenda-theme',tc=document.getElementById('tc'),root=document.documentElement;
     var btn=document.querySelector('.theme-toggle');
     btn.addEventListener('click',function(){{
       var isLight=root.getAttribute('data-theme')==='light';
-      if(isLight){{root.removeAttribute('data-theme');localStorage.setItem(KEY,'dark');}}
-      else{{root.setAttribute('data-theme','light');localStorage.setItem(KEY,'light');}}
+      if(isLight){{root.removeAttribute('data-theme');localStorage.setItem(KEY,'dark');tc.content='#000000';}}
+      else{{root.setAttribute('data-theme','light');localStorage.setItem(KEY,'light');tc.content='#f2f2f7';}}
     }});
   }})();
   </script>
@@ -1157,7 +1200,7 @@ def write_json(events: Iterable[Event]) -> None:
         }
         for e in events
     ]
-    (SITE_DIR / "agenda.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    (SITE_DIR / "agenda.json").write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
 
 
 if __name__ == "__main__":
@@ -1167,4 +1210,15 @@ if __name__ == "__main__":
     html_doc = render(events, tz)
     (SITE_DIR / "index.html").write_text(html_doc, encoding="utf-8")
     write_json(events)
+    (SITE_DIR / "_headers").write_text(
+        "/index.html\n"
+        "  Cache-Control: public, max-age=60, s-maxage=120, stale-while-revalidate=300\n"
+        "  X-Content-Type-Options: nosniff\n"
+        "  X-Frame-Options: DENY\n"
+        "  Referrer-Policy: strict-origin-when-cross-origin\n"
+        "\n"
+        "/agenda.json\n"
+        "  Cache-Control: public, max-age=60, s-maxage=120\n",
+        encoding="utf-8",
+    )
     print(f"Wrote {len(events)} event(s) to {SITE_DIR / 'index.html'}")

@@ -8,33 +8,44 @@
 
 > **https://github-actions-live-agenda.pages.dev**
 
-A private, auto-refreshing agenda page generated from an ICS calendar feed. Dark mode by default with a light/dark toggle. Deployed to Cloudflare Pages, secured with Cloudflare Access.
+A private, live-updating agenda page generated from an ICS calendar feed. Dark mode by default with a light/dark toggle. Deployed to Cloudflare Pages, secured with Cloudflare Access.
 
 ---
 
 ## How it works
 
 ```
-ICS feed (Outlook / Reclaim / Google)
-        ↓
-  generate_agenda.py      ← parses events, renders HTML
-        ↓
-  site/index.html         ← static output
-        ↓
-  Cloudflare Pages        ← builds on push, serves the page
-        ↓
-  Cloudflare Access       ← email-gated authentication
+Outlook / Reclaim / Google  →  ICS feed
+                                  ↓
+              ┌───────────────────┴───────────────────┐
+              │                                       │
+    generate_agenda.py                     /api/events (CF Function)
+    builds static HTML shell               fetches ICS live per request
+              │                                       │
+     site/index.html                          JSON → client JS
+              │                                       │
+              └───────────────────┬───────────────────┘
+                                  ↓
+                          Cloudflare Pages
+                                  ↓
+                          Cloudflare Access
+                       (email-gated auth)
 ```
+
+The static HTML is the initial shell. A Cloudflare Pages Function (`/api/events`) fetches the ICS feed live on every request. Client-side JS polls every 30 seconds and updates the DOM without page reloads.
 
 ## Features
 
-- **Timeline UI** — events grouped by day with a vertical timeline, color-coded accent bars, and staggered fade-in animations
+- **Live data** — polls every 30s via Cloudflare Pages Function, no rebuild needed
+- **Timeline UI** — events grouped by day with color-coded accent bars and staggered animations
 - **Live indicators** — pulsing dot and "Now" / "In progress" badges for current events
 - **Dark / Light mode** — dark by default, toggle persisted in `localStorage`
-- **Auto-refresh** — page reloads every 5 minutes via `<meta http-equiv="refresh">`
+- **Smart updates** — lightweight tick every 15s updates countdowns without full re-render
+- **Tab-aware** — fetches fresh data immediately when you switch back to the tab
 - **Responsive** — optimized for desktop, tablet, and mobile
 - **Glassmorphism** — frosted-glass cards with `backdrop-filter: blur()`
 - **Accessible** — `prefers-reduced-motion` support, semantic HTML, print styles
+- **Edge-cached** — 10s `s-maxage` on API responses to avoid hammering the ICS source
 
 ## Repo structure
 
@@ -42,6 +53,9 @@ ICS feed (Outlook / Reclaim / Google)
 .
 ├── scripts/
 │   └── generate_agenda.py   # Fetches ICS → generates site/index.html + agenda.json
+├── functions/
+│   └── api/
+│       └── events.js        # CF Pages Function — live ICS → JSON endpoint
 ├── site/                    # Build output (not committed)
 ├── requirements.txt         # icalendar>=6.0.0
 └── README.md
@@ -93,8 +107,4 @@ python scripts/generate_agenda.py
 open site/index.html
 ```
 
-## Triggering a rebuild
-
-The site rebuilds automatically on every push. To rebuild without code changes:
-
-**Cloudflare Pages → Deployments → Retry deployment**
+> Note: The `/api/events` endpoint only runs on Cloudflare. Locally, the page shows build-time data.
