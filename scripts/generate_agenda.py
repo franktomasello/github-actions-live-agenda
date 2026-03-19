@@ -3,14 +3,12 @@ from __future__ import annotations
 import html
 import json
 import os
-import re
 import sys
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Iterable
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from icalendar import Calendar
@@ -27,18 +25,6 @@ class Event:
     is_all_day: bool
 
 
-@dataclass(slots=True)
-class GitHubMention:
-    title: str
-    repo: str
-    number: int
-    url: str
-    comment_url: str
-    author: str
-    action_items: list[str]
-    updated: datetime
-
-
 def env(name: str, default: str | None = None, required: bool = False) -> str:
     value = os.getenv(name, default)
     if required and not value:
@@ -51,9 +37,6 @@ TIMEZONE = env("AGENDA_TIMEZONE", "America/Los_Angeles")
 TITLE = env("AGENDA_TITLE", "Live Agenda")
 WINDOW_HOURS = int(env("WINDOW_HOURS", "48"))
 MAX_EVENTS = int(env("MAX_EVENTS", "40"))
-GITHUB_TOKEN = env("GITHUB_TOKEN")
-GITHUB_USERNAME = env("GITHUB_USERNAME")
-MAX_MENTIONS = int(env("MAX_MENTIONS", "15"))
 SITE_DIR = Path(env("SITE_DIR", "site"))
 SITE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -76,134 +59,6 @@ def fetch_ics(url: str) -> bytes:
         raise SystemExit(f"Failed to fetch ICS feed: HTTP {exc.code}") from exc
     except URLError as exc:
         raise SystemExit(f"Failed to fetch ICS feed: {exc.reason}") from exc
-
-
-MENTOR_USERNAME = env("MENTOR_USERNAME", "michelemt")
-
-
-def _github_get(url: str, token: str) -> dict | list | None:
-    """Make an authenticated GET request to the GitHub API."""
-    req = Request(
-        url,
-        headers={
-            "User-Agent": "github-actions-live-agenda/1.0",
-            "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {token}",
-            "X-GitHub-Api-Version": "2022-11-28",
-        },
-        method="GET",
-    )
-    try:
-        with urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read())
-    except (HTTPError, URLError, Exception) as exc:
-        print(f"Warning: GitHub API request failed ({url}): {exc}", file=sys.stderr)
-        return None
-
-
-def _extract_action_items(body: str, username: str) -> list[str]:
-    """Extract action items mentioning @username from a 'Next Steps' section."""
-    lines = body.splitlines()
-    in_next_steps = False
-    items: list[str] = []
-    username_lower = username.lower()
-
-    for line in lines:
-        stripped = line.strip()
-        # Detect "Next Steps" heading (## Next Steps, **Next Steps**, or plain)
-        if re.match(r"^(#{1,4}\s+)?(\*\*)?next\s*steps(\*\*)?:?\s*$", stripped, re.IGNORECASE):
-            in_next_steps = True
-            continue
-
-        # Exit section on a new heading or bold heading
-        if in_next_steps and (re.match(r"^#{1,4}\s+", stripped) or re.match(r"^\*\*[^*]+\*\*\s*$", stripped)):
-            in_next_steps = False
-            continue
-
-        if not in_next_steps:
-            continue
-
-        # Match checkbox or bullet items: - [ ] text, - [x] text, - text, * text
-        item_match = re.match(r"^[-*]\s+(\[[ xX]\]\s+)?(.*)", stripped)
-        if item_match and f"@{username_lower}" in stripped.lower():
-            item_text = item_match.group(2).strip()
-            items.append(item_text)
-
-    return items
-
-
-def fetch_github_mentions(token: str, username: str, tz: ZoneInfo) -> list[GitHubMention]:
-    """Fetch open issues where MENTOR_USERNAME mentions @username in Next Steps."""
-    if not token or not username:
-        return []
-
-    # Search for open issues where the user is mentioned
-    query = quote(f"mentions:{username} is:open is:issue sort:updated-desc")
-    api_url = f"https://api.github.com/search/issues?q={query}&per_page={MAX_MENTIONS}"
-    data = _github_get(api_url, token)
-    if not data:
-        return []
-
-    mentions: list[GitHubMention] = []
-    for item in data.get("items", []):
-        repo_url = item.get("repository_url", "")
-        repo = "/".join(repo_url.rsplit("/", 2)[-2:]) if repo_url else ""
-        issue_number = item.get("number", 0)
-
-        # Fetch comments on this issue and look for mentor's Next Steps
-        comments_url = f"{repo_url}/issues/{issue_number}/comments?per_page=100"
-        comments = _github_get(comments_url, token)
-        if not comments or not isinstance(comments, list):
-            continue
-
-        # Search mentor's comments in reverse order (most recent first)
-        for comment in reversed(comments):
-            commenter = comment.get("user", {}).get("login", "")
-            if commenter.lower() != MENTOR_USERNAME.lower():
-                continue
-
-            body = comment.get("body", "")
-            action_items = _extract_action_items(body, username)
-            if not action_items:
-                continue
-
-            updated = datetime.fromisoformat(
-                comment["updated_at"].replace("Z", "+00:00")
-            ).astimezone(tz)
-
-            mentions.append(
-                GitHubMention(
-                    title=item.get("title", "Untitled"),
-                    repo=repo,
-                    number=issue_number,
-                    url=item.get("html_url", ""),
-                    comment_url=comment.get("html_url", ""),
-                    author=MENTOR_USERNAME,
-                    action_items=action_items,
-                    updated=updated,
-                )
-            )
-            break  # Only take the most recent matching comment per issue
-
-    return mentions
-
-
-def _time_ago(dt: datetime, now: datetime) -> str:
-    """Return human-friendly relative time like '2h ago' or '3d ago'."""
-    diff = now - dt
-    total_min = int(diff.total_seconds() // 60)
-    if total_min < 1:
-        return "just now"
-    if total_min < 60:
-        return f"{total_min}m ago"
-    hours = total_min // 60
-    if hours < 24:
-        return f"{hours}h ago"
-    days = hours // 24
-    if days < 30:
-        return f"{days}d ago"
-    months = days // 30
-    return f"{months}mo ago"
 
 
 def ensure_dt(value: date | datetime, tz: ZoneInfo) -> tuple[datetime, bool]:
@@ -333,74 +188,7 @@ def _event_accent(event: Event) -> str:
     return "#5e5ce6"  # indigo evening
 
 
-def render_github_section(mentions: list[GitHubMention], now: datetime, start_idx: int) -> tuple[str, int]:
-    """Render the GitHub mentions section. Returns (html, next_global_idx)."""
-    if not mentions:
-        return "", start_idx
-
-    idx = start_idx
-    cards: list[str] = []
-    for i, m in enumerate(mentions):
-        is_last = i == len(mentions) - 1
-        last_class = " is-last" if is_last else ""
-        delay = f' style="animation-delay:{idx * 40}ms"'
-        idx += 1
-
-        issue_icon = (
-            '<svg class="gh-type-icon" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">'
-            '<path d="M8 9.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>'
-            '<path d="M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0z"/></svg>'
-        )
-
-        # Render action items as a checklist
-        items_html = "".join(
-            f'<li class="gh-action-item">'
-            f'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l2 2"/></svg>'
-            f'<span>{_esc(item)}</span>'
-            f'</li>'
-            for item in m.action_items
-        )
-
-        updated_ago = _time_ago(m.updated, now)
-
-        cards.append(
-            f'<div class="tl-item{last_class} fade-in"{delay}>'
-            f'<div class="tl-marker"><span class="dot gh-dot"></span></div>'
-            f'<a href="{_esc(m.comment_url or m.url)}" target="_blank" rel="noopener" class="card gh-card" style="--accent-bar:#8b5cf6">'
-            f'<div class="card-top">'
-            f'<div class="gh-meta">'
-            f'{issue_icon}'
-            f'<span class="gh-repo">{_esc(m.repo)}</span>'
-            f'<span class="gh-number">#{m.number}</span>'
-            f'</div>'
-            f'<div class="card-meta-right">'
-            f'<span class="gh-updated">{updated_ago}</span>'
-            f'</div>'
-            f'</div>'
-            f'<h3>{_esc(m.title)}</h3>'
-            f'<ul class="gh-action-list">{items_html}</ul>'
-            f'<div class="gh-footer">'
-            f'<span class="gh-author">from @{_esc(m.author)}</span>'
-            f'</div>'
-            f'</a>'
-            f'</div>'
-        )
-
-    total_items = sum(len(m.action_items) for m in mentions)
-    section = (
-        f'<section class="day-group gh-section">'
-        f'<div class="day-head gh-head">'
-        f'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.6"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
-        f'<h2>Action Items</h2>'
-        f'<span class="cnt">{total_items}</span>'
-        f'</div>'
-        f'<div class="timeline">{"".join(cards)}</div>'
-        f'</section>'
-    )
-    return section, idx
-
-
-def render(events: Iterable[Event], tz: ZoneInfo, mentions: list[GitHubMention] | None = None) -> str:
+def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     now = datetime.now(tz)
     event_list = list(events)
     grouped: dict[str, list[Event]] = {}
@@ -491,11 +279,6 @@ def render(events: Iterable[Event], tz: ZoneInfo, mentions: list[GitHubMention] 
                 f'<div class="timeline">{"".join(cards)}</div>'
                 f"</section>"
             )
-
-    # ── GitHub mentions section ──
-    gh_html = ""
-    if mentions:
-        gh_html, global_idx = render_github_section(mentions, now, global_idx)
 
     total_events = len(event_list)
     next_event = event_list[0] if event_list else None
@@ -968,105 +751,6 @@ def render(events: Iterable[Event], tz: ZoneInfo, mentions: list[GitHubMention] 
       font-weight: 400;
     }}
 
-    /* ── GitHub mentions ── */
-    .gh-section {{
-      margin-top: 48px;
-      padding-top: 32px;
-      border-top: 1px solid var(--border);
-    }}
-    .gh-head svg {{
-      color: var(--text-2);
-    }}
-    .gh-head h2 {{
-      color: #8b5cf6 !important;
-    }}
-    .gh-chip {{
-      background: rgba(139,92,246,.12);
-      color: #8b5cf6;
-    }}
-    .gh-card {{
-      display: block;
-      text-decoration: none;
-      color: inherit;
-      cursor: pointer;
-    }}
-    .gh-card:hover {{
-      border-color: rgba(139,92,246,.25);
-    }}
-    .gh-card:hover::before {{
-      opacity: 1;
-    }}
-    .gh-dot {{
-      box-shadow: 0 0 0 1.5px rgba(139,92,246,.3) !important;
-    }}
-    .gh-meta {{
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      min-width: 0;
-      overflow: hidden;
-    }}
-    .gh-type-icon {{
-      color: var(--text-3);
-      flex-shrink: 0;
-    }}
-    .gh-repo {{
-      font-size: 0.72rem;
-      color: var(--text-2);
-      font-weight: 520;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }}
-    .gh-number {{
-      font-size: 0.72rem;
-      color: var(--text-3);
-      font-weight: 480;
-      flex-shrink: 0;
-    }}
-    .gh-card h3 {{
-      margin-top: 2px;
-    }}
-    .gh-action-list {{
-      list-style: none;
-      margin: 10px 0 6px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }}
-    .gh-action-item {{
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      font-size: 0.82rem;
-      color: var(--text-1);
-      line-height: 1.45;
-    }}
-    .gh-action-item svg {{
-      color: #8b5cf6;
-      flex-shrink: 0;
-      margin-top: 2px;
-    }}
-    [data-theme="light"] .gh-action-item svg {{
-      color: #7c3aed;
-    }}
-    .gh-footer {{
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-top: 6px;
-    }}
-    .gh-author {{
-      font-size: 0.72rem;
-      color: var(--accent);
-      font-weight: 540;
-    }}
-    .gh-updated {{
-      font-size: 0.68rem;
-      color: var(--text-3);
-      font-weight: 420;
-    }}
-
     /* ── Empty state ── */
     .empty-state {{
       text-align: center;
@@ -1191,12 +875,10 @@ def render(events: Iterable[Event], tz: ZoneInfo, mentions: list[GitHubMention] 
         <span class="chip">{WINDOW_HOURS}h window</span>
         <span class="chip">{_esc(TIMEZONE)}</span>
         <span class="chip">{total_events} event{"s" if total_events != 1 else ""}</span>
-        {'<span class="chip gh-chip">' + str(len(mentions)) + ' mention' + ('s' if len(mentions) != 1 else '') + '</span>' if mentions else ''}
       </div>
       {hero_next}
     </div>
     {''.join(sections)}
-    {gh_html}
     <footer>
       Auto-refreshes every 5&nbsp;min &middot; Rebuilt on push via Cloudflare&nbsp;Pages
     </footer>
@@ -1243,8 +925,7 @@ if __name__ == "__main__":
     tz = ZoneInfo(TIMEZONE)
     raw = fetch_ics(ICS_URL)
     events = parse_events(raw, tz)
-    mentions = fetch_github_mentions(GITHUB_TOKEN, GITHUB_USERNAME, tz)
-    html_doc = render(events, tz, mentions=mentions)
+    html_doc = render(events, tz)
     (SITE_DIR / "index.html").write_text(html_doc, encoding="utf-8")
     write_json(events)
-    print(f"Wrote {len(events)} event(s) and {len(mentions)} mention(s) to {SITE_DIR / 'index.html'}")
+    print(f"Wrote {len(events)} event(s) to {SITE_DIR / 'index.html'}")
