@@ -9,6 +9,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Iterable
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from icalendar import Calendar
@@ -84,7 +85,7 @@ def fetch_github_mentions(token: str, username: str, tz: ZoneInfo) -> list[GitHu
     if not token or not username:
         return []
 
-    query = f"mentions:{username} is:open is:issue sort:updated-desc"
+    query = quote(f"mentions:{username} is:open is:issue sort:updated-desc")
     api_url = f"https://api.github.com/search/issues?q={query}&per_page={MAX_MENTIONS}"
     req = Request(
         api_url,
