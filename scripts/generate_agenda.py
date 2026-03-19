@@ -309,6 +309,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+  <style>@font-face {{ font-family: 'Inter'; font-display: swap; }}</style>
   <style>
     /* ── Reset ── */
     *,*::before,*::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
@@ -500,12 +501,10 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       padding-left: 2px;
     }}
     .day-head h2 {{
-      font-size: 0.98rem;
+      font-size: 0.72rem;
       font-weight: 700;
-      letter-spacing: -0.01em;
       text-transform: uppercase;
       letter-spacing: 0.04em;
-      font-size: 0.72rem;
       color: var(--text-2);
     }}
     .day-head.is-today h2 {{
@@ -880,7 +879,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     </div>
     {''.join(sections)}
     <footer>
-      Auto-refreshes every 2&nbsp;min &middot; Rebuilt on push via Cloudflare&nbsp;Pages
+      Auto-refreshes every 2&nbsp;min &middot; Rebuilds every 5&nbsp;min via Cloudflare&nbsp;Pages
     </footer>
   </main>
   <button class="theme-toggle" aria-label="Toggle light/dark mode" title="Toggle theme">
