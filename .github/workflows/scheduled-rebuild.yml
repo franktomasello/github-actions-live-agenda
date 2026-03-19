@@ -1,11 +1,7 @@
 name: Scheduled Rebuild
 
 on:
-  schedule:
-    # Every 5 minutes — GitHub Actions minimum interval.
-    # Triggers a Cloudflare Pages rebuild so the agenda stays current.
-    - cron: '*/5 * * * *'
-  workflow_dispatch: # allow manual trigger
+  workflow_dispatch: # manual trigger only
 
 jobs:
   trigger-rebuild:
