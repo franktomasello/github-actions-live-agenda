@@ -74,6 +74,24 @@ _RENDER_JS = r"""
     return r ? 'in ' + h + 'h ' + r + 'm' : 'in ' + h + 'h';
   }
 
+  function progressInfo(s, e, isAllDay, now) {
+    if (isAllDay) return null;
+    var start = new Date(s), end = new Date(e);
+    if (now < start || now > end) return null;
+    var total = end - start;
+    var elapsed = now - start;
+    var pct = Math.min(100, Math.max(0, (elapsed / total) * 100));
+    var remainMin = Math.max(0, Math.ceil((end - now) / 60000));
+    var remainStr;
+    if (remainMin < 60) {
+      remainStr = remainMin + 'm left';
+    } else {
+      var h = Math.floor(remainMin / 60), r = remainMin % 60;
+      remainStr = r ? h + 'h ' + r + 'm left' : h + 'h left';
+    }
+    return { pct: Math.round(pct), remainStr: remainStr };
+  }
+
   function accent(s, isAllDay) {
     if (isAllDay) return '#af52de';
     var h = +_fmtHour.format(new Date(s)) % 24;
@@ -107,6 +125,20 @@ _RENDER_JS = r"""
       ? ev.description.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')
       : '';
 
+    var prog = progressInfo(ev.start, ev.end, ev.isAllDay, now);
+    var progressHtml = '';
+    if (prog) {
+      progressHtml = '<div class="progress-wrap">'
+        + '<div class="progress-track">'
+        + '<div class="progress-fill" style="width:' + prog.pct + '%"></div>'
+        + '<div class="progress-glow" style="left:' + prog.pct + '%"></div>'
+        + '</div>'
+        + '<div class="progress-meta">'
+        + '<span class="progress-pct">' + prog.pct + '%</span>'
+        + '<span class="progress-remain">' + esc(prog.remainStr) + '</span>'
+        + '</div></div>';
+    }
+
     return (
       '<div class="tl-item' + (isNow ? ' is-now' : '') + (isLast ? ' is-last' : '') + ' fade-in"'
         + ' style="animation-delay:' + delay + 'ms">'
@@ -121,6 +153,7 @@ _RENDER_JS = r"""
       + '</div></div>'
       + '<h3>' + esc(ev.title) + '</h3>'
       + '<div class="range">' + esc(rangeDisp) + '</div>'
+      + progressHtml
       + (ev.location ? '<div class="loc">' + LOC_ICON + '<span>' + esc(ev.location) + '</span></div>' : '')
       + (ev.description ? '<details><summary>' + NOTES_ICON + ' Notes</summary><div class="notes">' + desc + '</div></details>' : '')
       + '</article></div>'
@@ -463,6 +496,30 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
                     else ""
                 )
 
+                # Progress bar for in-progress events
+                progress_html = ""
+                if is_now and not event.is_all_day:
+                    total = (event.end - event.start).total_seconds()
+                    elapsed = (now - event.start).total_seconds()
+                    pct = max(0, min(100, int(elapsed / total * 100))) if total > 0 else 0
+                    remain_min = max(0, int((event.end - now).total_seconds() // 60) + 1)
+                    if remain_min < 60:
+                        remain_str = f"{remain_min}m left"
+                    else:
+                        rh, rm = divmod(remain_min, 60)
+                        remain_str = f"{rh}h {rm}m left" if rm else f"{rh}h left"
+                    progress_html = (
+                        f'<div class="progress-wrap">'
+                        f'<div class="progress-track">'
+                        f'<div class="progress-fill" style="width:{pct}%"></div>'
+                        f'<div class="progress-glow" style="left:{pct}%"></div>'
+                        f'</div>'
+                        f'<div class="progress-meta">'
+                        f'<span class="progress-pct">{pct}%</span>'
+                        f'<span class="progress-remain">{_esc(remain_str)}</span>'
+                        f'</div></div>'
+                    )
+
                 delay = f' style="animation-delay:{global_idx * 40}ms"'
                 global_idx += 1
 
@@ -479,6 +536,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
                     f"</div>"
                     f"<h3>{_esc(event.title)}</h3>"
                     f'<div class="range">{_esc(format_time(event))}</div>'
+                    f"{progress_html}"
                     f"{location}"
                     f"{details}"
                     f"</article>"
@@ -896,6 +954,60 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       font-weight: 420;
     }}
 
+    /* ── Progress bar ── */
+    .progress-wrap {{
+      margin-top: 12px;
+      margin-bottom: 4px;
+    }}
+    .progress-track {{
+      position: relative;
+      height: 4px;
+      background: var(--surface-2);
+      border-radius: 4px;
+      overflow: visible;
+    }}
+    .progress-fill {{
+      height: 100%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, var(--live) 0%, #5af078 100%);
+      transition: width .8s cubic-bezier(.22,1,.36,1);
+      position: relative;
+      z-index: 1;
+    }}
+    .progress-glow {{
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--live);
+      box-shadow: 0 0 8px 2px rgba(48,209,88,.45), 0 0 20px 4px rgba(48,209,88,.15);
+      z-index: 2;
+      transition: left .8s cubic-bezier(.22,1,.36,1);
+    }}
+    .progress-meta {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 6px;
+    }}
+    .progress-pct {{
+      font-size: 0.65rem;
+      font-weight: 680;
+      color: var(--live-text);
+      font-variant-numeric: tabular-nums;
+    }}
+    .progress-remain {{
+      font-size: 0.65rem;
+      font-weight: 480;
+      color: var(--text-3);
+      font-variant-numeric: tabular-nums;
+    }}
+    [data-theme="light"] .progress-glow {{
+      box-shadow: 0 0 6px 2px rgba(52,199,89,.35), 0 0 16px 4px rgba(52,199,89,.1);
+    }}
+
     .badge {{
       display: inline-flex;
       align-items: center;
@@ -1083,6 +1195,8 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .card {{ transition: none; }}
       .dot {{ transition: none; }}
       .theme-toggle, .theme-toggle svg {{ transition: none; }}
+      .progress-fill, .progress-glow {{ transition: none; }}
+      .progress-glow {{ box-shadow: none; }}
     }}
   </style>
 </head>
