@@ -1,5 +1,7 @@
 # Live Agenda
 
+**https://github-actions-live-agenda.pages.dev**
+
 A static agenda page generated from an Outlook or Reclaim-backed ICS calendar feed, deployed via Cloudflare Pages and secured with Cloudflare Access.
 
 ## What this is optimized for
