@@ -43,27 +43,21 @@ _RENDER_JS = r"""
   var _fmtHour = new Intl.DateTimeFormat('en', {
     timeZone: TZ, hour: 'numeric', hour12: false,
   });
-  var _fmtClockHr = new Intl.DateTimeFormat('en-US', {
-    timeZone: TZ, hour: 'numeric', hour12: true,
-  });
-  var _fmtClockMin = new Intl.DateTimeFormat('en-US', {
-    timeZone: TZ, minute: '2-digit',
-  });
-  var _fmtClockPeriod = new Intl.DateTimeFormat('en-US', {
-    timeZone: TZ, hour: 'numeric', hour12: true, hourCycle: 'h12',
-  });
   var _fmtClockDate = new Intl.DateTimeFormat('en-US', {
     timeZone: TZ, weekday: 'long', month: 'short', day: 'numeric',
   });
 
   // ── Clock helpers (avoid innerHTML to preserve CSS animations) ─────────────
   function clockParts(now) {
-    var hr = _fmtClockHr.format(now).replace(/\s*[APap][Mm]\s*/, '');
-    var min = _fmtClockMin.format(now);
+    var parts = _fmtTime.formatToParts(now);
+    var hr = '', min = '', period = '';
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i].type === 'hour') hr = parts[i].value;
+      else if (parts[i].type === 'minute') min = parts[i].value;
+      else if (parts[i].type === 'dayPeriod') period = parts[i].value.toUpperCase();
+    }
     if (min.length < 2) min = '0' + min;
-    var full = _fmtClockPeriod.format(now);
-    var period = full.match(/[APap][Mm]/);
-    return { hr: hr, min: min, period: period ? period[0] : '' };
+    return { hr: hr, min: min, period: period };
   }
 
   // ── HTML helpers ────────────────────────────────────────────────────────────
@@ -213,8 +207,8 @@ _RENDER_JS = r"""
   }
 
   // ── Full DOM update ─────────────────────────────────────────────────────────
-  function renderAll(events) {
-    var now = new Date();
+  function renderAll(events, _now) {
+    var now = _now || new Date();
     events = events.filter(function (e) { return new Date(e.end) >= now; });
 
     // Live clock — set innerHTML once with span structure
@@ -343,7 +337,7 @@ _RENDER_JS = r"""
       if (heroLive) heroLive.textContent = heroRel;
     }
 
-    if (needsFullRender) renderAll(currentData);
+    if (needsFullRender) renderAll(currentData, now);
   }
 
   // ── Data fetching & polling ─────────────────────────────────────────────────
@@ -379,6 +373,7 @@ _RENDER_JS = r"""
     if (window.__AGENDA_EVENTS__) {
       currentData = window.__AGENDA_EVENTS__;
       currentSig = sig(currentData);
+      renderAll(currentData);
     }
   }
 
@@ -702,6 +697,19 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
             )
 
     total_events = len(event_list)
+
+    # Server-side clock (visible immediately, JS takes over on hydration)
+    _clock_hr = now.strftime("%I").lstrip("0") or "12"
+    _clock_min = now.strftime("%M")
+    _clock_period = now.strftime("%p")
+    _clock_date = now.strftime("%A, %b %-d") if not _WIN else now.strftime("%A, %b %#d")
+    _clock_html = (
+        f'<span class="clock-hr">{_clock_hr}</span>'
+        f'<span class="clock-sep">:</span>'
+        f'<span class="clock-min">{_clock_min}</span>'
+        f'<span class="clock-period">{_clock_period}</span>'
+    )
+
     next_event = event_list[0] if event_list else None
     hero_next = ""
     if next_event:
@@ -827,6 +835,9 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       letter-spacing: -0.05em;
       line-height: 1.05;
       color: var(--text);
+      flex: 1;
+      min-width: 0;
+      overflow-wrap: break-word;
     }}
     .hero-top {{
       display: flex;
@@ -1505,9 +1516,9 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       <div class="hero-top">
         <h1>{_esc(TITLE)}</h1>
         <div class="clock" aria-live="polite" aria-label="Current time">
-          <span class="clock-time" id="clock-time"></span>
+          <span class="clock-time" id="clock-time">{_clock_html}</span>
           <div class="clock-divider"></div>
-          <span class="clock-date" id="clock-date"></span>
+          <span class="clock-date" id="clock-date">{_clock_date}</span>
         </div>
       </div>
       <div class="hero-chips">
