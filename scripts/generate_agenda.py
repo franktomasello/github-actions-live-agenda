@@ -138,7 +138,9 @@ _RENDER_JS = r"""
   var NOTES_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
 
   // ── Card & section rendering ────────────────────────────────────────────────
-  function renderCard(ev, isLast, delay, now) {
+  var _isFirstRender = true;
+
+  function renderCard(ev, isLast, delay, now, animate) {
     var rel       = timeUntil(ev.start, ev.end, ev.isAllDay, now);
     var isNow     = rel === 'Now' || rel === 'In progress';
     var timeDisp  = ev.isAllDay ? 'All day' : fmtTime(ev.start);
@@ -164,10 +166,13 @@ _RENDER_JS = r"""
         + '</div></div>';
     }
 
+    var animClass = animate ? ' fade-in' : '';
+    var animStyle = animate ? ' style="animation-delay:' + delay + 'ms"' : '';
+
     return (
-      '<div class="tl-item' + (isNow ? ' is-now' : '') + (isLast ? ' is-last' : '') + ' fade-in"'
+      '<div class="tl-item' + (isNow ? ' is-now' : '') + (isLast ? ' is-last' : '') + animClass + '"'
         + ' data-start="' + esc(ev.start) + '" data-end="' + esc(ev.end) + '" data-allday="' + (ev.isAllDay ? '1' : '0') + '"'
-        + ' style="animation-delay:' + delay + 'ms">'
+        + animStyle + '>'
       + '<div class="tl-marker">' + (isNow ? '<span class="pulse"></span>' : '<span class="dot"></span>') + '</div>'
       + '<article class="card" style="--accent-bar:' + clr + '">'
       + '<div class="card-top">'
@@ -186,11 +191,11 @@ _RENDER_JS = r"""
     );
   }
 
-  function renderSection(heading, evts, idx, now) {
+  function renderSection(heading, evts, idx, now, animate) {
     var isToday = heading === 'Today';
     var cards = '', i;
     for (i = 0; i < evts.length; i++) {
-      cards += renderCard(evts[i], i === evts.length - 1, idx * 40, now);
+      cards += renderCard(evts[i], i === evts.length - 1, idx * 40, now, animate);
       idx++;
     }
     var dateSub = (!isToday && heading !== 'Tomorrow' && evts.length > 0)
@@ -209,6 +214,8 @@ _RENDER_JS = r"""
   // ── Full DOM update ─────────────────────────────────────────────────────────
   function renderAll(events, _now) {
     var now = _now || new Date();
+    var animate = _isFirstRender;
+    _isFirstRender = false;
     events = events.filter(function (e) { return new Date(e.end) >= now; });
 
     // Live clock — set innerHTML once with span structure
@@ -233,13 +240,13 @@ _RENDER_JS = r"""
     // Render sections
     var html = '', idx = 0;
     if (order.length === 0) {
-      html = '<section class="day-group fade-in"><div class="empty-state">'
+      html = '<section class="day-group' + (animate ? ' fade-in' : '') + '"><div class="empty-state">'
         + '<div class="empty-icon"><svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/></svg></div>'
         + '<h2>All clear</h2><p>Nothing on the books for the next ' + WINDOW_HOURS + ' hours.</p>'
         + '</div></section>';
     } else {
       order.forEach(function (h) {
-        var r = renderSection(h, grouped[h], idx, now);
+        var r = renderSection(h, grouped[h], idx, now, animate);
         html += r.html; idx = r.idx;
       });
     }
@@ -247,22 +254,27 @@ _RENDER_JS = r"""
     if (container) container.innerHTML = html;
 
     // Hero next-up
+    updateHero(events, now, animate);
+  }
+
+  function updateHero(events, now, animate) {
     var heroWrap = document.getElementById('hero-next-wrap');
-    if (heroWrap) {
-      if (events.length > 0) {
-        var next = events[0];
-        var rel  = timeUntil(next.start, next.end, next.isAllDay, now);
-        var isNow = rel === 'Now' || rel === 'In progress';
-        heroWrap.innerHTML = '<div class="hero-next fade-in" style="animation-delay:60ms">'
-          + '<span class="hero-next-label">' + (isNow ? 'Live' : 'Next') + '</span>'
-          + '<span class="hero-next-title">' + esc(next.title) + '</span>'
-          + (isNow
-            ? '<span class="hero-live">'  + esc(rel) + '</span>'
-            : '<span class="hero-eta">'   + esc(rel) + '</span>')
-          + '</div>';
-      } else {
-        heroWrap.innerHTML = '';
-      }
+    if (!heroWrap) return;
+    if (events.length > 0) {
+      var next = events[0];
+      var rel  = timeUntil(next.start, next.end, next.isAllDay, now);
+      var isNow = rel === 'Now' || rel === 'In progress';
+      var animClass = animate ? ' fade-in' : '';
+      var animStyle = animate ? ' style="animation-delay:60ms"' : '';
+      heroWrap.innerHTML = '<div class="hero-next' + animClass + '"' + animStyle + '>'
+        + '<span class="hero-next-label">' + (isNow ? 'Live' : 'Next') + '</span>'
+        + '<span class="hero-next-title">' + esc(next.title) + '</span>'
+        + (isNow
+          ? '<span class="hero-live">'  + esc(rel) + '</span>'
+          : '<span class="hero-eta">'   + esc(rel) + '</span>')
+        + '</div>';
+    } else {
+      heroWrap.innerHTML = '';
     }
   }
 
@@ -270,18 +282,17 @@ _RENDER_JS = r"""
   function tick() {
     if (!currentData) return;
     var now = new Date();
-    var needsFullRender = false;
 
     // Update clock — textContent only, preserves blink animation on separator
     var cp = clockParts(now);
     var clockHr = document.querySelector('.clock-hr');
     var clockMin = document.querySelector('.clock-min');
     var clockPer = document.querySelector('.clock-period');
-    var clockDate = document.getElementById('clock-date');
+    var clockDateEl = document.getElementById('clock-date');
     if (clockHr)  clockHr.textContent  = cp.hr;
     if (clockMin) clockMin.textContent = cp.min;
     if (clockPer) clockPer.textContent = cp.period;
-    if (clockDate) clockDate.textContent = _fmtClockDate.format(now);
+    if (clockDateEl) clockDateEl.textContent = _fmtClockDate.format(now);
 
     // Update event count chip
     var activeEvents = currentData.filter(function (e) { return new Date(e.end) >= now; });
@@ -290,6 +301,7 @@ _RENDER_JS = r"""
 
     // Update each card in-place
     var items = document.querySelectorAll('.tl-item');
+    var removedAny = false;
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
       var start = item.getAttribute('data-start');
@@ -302,42 +314,144 @@ _RENDER_JS = r"""
       var isNow = rel === 'Now' || rel === 'In progress';
       var hasEnded = new Date(end) < now;
 
-      // State transition or event ended — rebuild to remove/restyle
-      if (isNow !== wasNow || hasEnded) { needsFullRender = true; break; }
+      // Ended event — fade out and remove from DOM
+      if (hasEnded) {
+        item.style.transition = 'opacity .4s ease, max-height .4s ease';
+        item.style.opacity = '0';
+        item.style.maxHeight = '0';
+        item.style.overflow = 'hidden';
+        item.style.paddingBottom = '0';
+        removedAny = true;
+        (function(el) {
+          setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 400);
+        })(item);
+        continue;
+      }
 
-      // Update countdown text
+      // State transition: not-now → now
+      if (isNow && !wasNow) {
+        item.classList.add('is-now');
+        // Swap marker: dot → pulse
+        var marker = item.querySelector('.tl-marker');
+        if (marker) marker.innerHTML = '<span class="pulse"></span>';
+        // Swap countdown → live badge
+        var metaRight = item.querySelector('.card-meta-right');
+        if (metaRight) metaRight.innerHTML = '<span class="badge live">' + esc(rel) + '</span>';
+        // Add progress bar if not present
+        var card = item.querySelector('.card');
+        var prog = progressInfo(start, end, allDay, now);
+        if (prog && card && !item.querySelector('.progress-wrap')) {
+          var range = item.querySelector('.range');
+          if (range) {
+            var progDiv = document.createElement('div');
+            progDiv.className = 'progress-wrap';
+            progDiv.innerHTML = '<div class="progress-track">'
+              + '<div class="progress-fill" style="width:' + prog.pct + '%"></div>'
+              + '<div class="progress-glow" style="left:' + prog.pct + '%"></div>'
+              + '</div><div class="progress-meta">'
+              + '<span class="progress-pct">' + prog.pct + '%</span>'
+              + '<span class="progress-remain">' + esc(prog.remainStr) + '</span>'
+              + '</div>';
+            range.parentNode.insertBefore(progDiv, range.nextSibling);
+          }
+        }
+        continue;
+      }
+
+      // State transition: now → not-now (rare, but handle it)
+      if (!isNow && wasNow) {
+        item.classList.remove('is-now');
+        var marker2 = item.querySelector('.tl-marker');
+        if (marker2) marker2.innerHTML = '<span class="dot"></span>';
+        var metaRight2 = item.querySelector('.card-meta-right');
+        if (metaRight2 && rel) metaRight2.innerHTML = '<span class="countdown">' + esc(rel) + '</span>';
+        else if (metaRight2) metaRight2.innerHTML = '';
+        // Remove progress bar
+        var progWrap = item.querySelector('.progress-wrap');
+        if (progWrap) progWrap.parentNode.removeChild(progWrap);
+        continue;
+      }
+
+      // Steady state — update countdown/badge text
       var countdown = item.querySelector('.countdown');
       if (countdown) countdown.textContent = rel;
 
-      // Update live badge text
       var badge = item.querySelector('.badge.live');
       if (badge) badge.textContent = rel;
 
       // Update progress bar
-      var prog = progressInfo(start, end, allDay, now);
-      if (prog) {
+      var prog2 = progressInfo(start, end, allDay, now);
+      if (prog2) {
         var fill = item.querySelector('.progress-fill');
         var glow = item.querySelector('.progress-glow');
         var pct = item.querySelector('.progress-pct');
         var remain = item.querySelector('.progress-remain');
-        if (fill) fill.style.width = prog.pct + '%';
-        if (glow) glow.style.left = prog.pct + '%';
-        if (pct) pct.textContent = prog.pct + '%';
-        if (remain) remain.textContent = prog.remainStr;
+        if (fill) fill.style.width = prog2.pct + '%';
+        if (glow) glow.style.left = prog2.pct + '%';
+        if (pct) pct.textContent = prog2.pct + '%';
+        if (remain) remain.textContent = prog2.remainStr;
       }
     }
 
-    // Update hero next-up in-place
-    if (!needsFullRender && activeEvents.length > 0) {
-      var next = activeEvents[0];
-      var heroRel = timeUntil(next.start, next.end, next.isAllDay, now);
-      var heroEta = document.querySelector('.hero-eta');
-      var heroLive = document.querySelector('.hero-live');
-      if (heroEta) heroEta.textContent = heroRel;
-      if (heroLive) heroLive.textContent = heroRel;
+    // Update section counts and remove empty sections after card removal
+    if (removedAny) {
+      setTimeout(function() {
+        var sections = document.querySelectorAll('.day-group');
+        for (var s = 0; s < sections.length; s++) {
+          var cards = sections[s].querySelectorAll('.tl-item');
+          if (cards.length === 0) {
+            sections[s].style.transition = 'opacity .3s ease';
+            sections[s].style.opacity = '0';
+            (function(el) {
+              setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 300);
+            })(sections[s]);
+          } else {
+            var cnt = sections[s].querySelector('.cnt');
+            if (cnt) cnt.textContent = cards.length;
+          }
+        }
+        // Check if all events gone
+        var remaining = document.querySelectorAll('.tl-item');
+        if (remaining.length === 0) {
+          renderAll(currentData, new Date());
+        }
+      }, 450);
     }
 
-    if (needsFullRender) renderAll(currentData, now);
+    // Update hero next-up in-place
+    if (activeEvents.length > 0) {
+      var next = activeEvents[0];
+      var heroRel = timeUntil(next.start, next.end, next.isAllDay, now);
+      var heroIsNow = heroRel === 'Now' || heroRel === 'In progress';
+      var heroEta = document.querySelector('.hero-eta');
+      var heroLive = document.querySelector('.hero-live');
+      var heroLabel = document.querySelector('.hero-next-label');
+      var heroTitle = document.querySelector('.hero-next-title');
+
+      // Update the countdown/live text
+      if (heroEta) heroEta.textContent = heroRel;
+      if (heroLive) heroLive.textContent = heroRel;
+
+      // Handle hero state transitions (next→live or live→next)
+      if (heroIsNow && heroEta) {
+        // Was showing eta, now should show live — swap in-place
+        updateHero(activeEvents, now, false);
+      } else if (!heroIsNow && heroLive) {
+        // Was showing live, now should show eta — swap in-place
+        updateHero(activeEvents, now, false);
+      }
+
+      // Update title if the next event changed
+      if (heroTitle && heroTitle.textContent !== next.title) {
+        updateHero(activeEvents, now, false);
+      }
+
+      // Update label
+      if (heroLabel) heroLabel.textContent = heroIsNow ? 'Live' : 'Next';
+    } else {
+      var heroWrap = document.getElementById('hero-next-wrap');
+      if (heroWrap && heroWrap.innerHTML !== '') heroWrap.innerHTML = '';
+    }
   }
 
   // ── Data fetching & polling ─────────────────────────────────────────────────
