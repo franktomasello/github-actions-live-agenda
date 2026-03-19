@@ -880,7 +880,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     </div>
     {''.join(sections)}
     <footer>
-      Auto-refreshes every 5&nbsp;min &middot; Rebuilt by GitHub&nbsp;Actions
+      Auto-refreshes every 5&nbsp;min &middot; Rebuilt on push via Cloudflare&nbsp;Pages
     </footer>
   </main>
   <button class="theme-toggle" aria-label="Toggle light/dark mode" title="Toggle theme">

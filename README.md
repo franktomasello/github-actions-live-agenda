@@ -1,96 +1,100 @@
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.12+-3776ab?style=flat-square&logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/deploy-Cloudflare%20Pages-f38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Pages">
+  <img src="https://img.shields.io/badge/auth-Cloudflare%20Access-f38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Access">
+</p>
+
 # Live Agenda
 
-**https://github-actions-live-agenda.pages.dev**
+> **https://github-actions-live-agenda.pages.dev**
 
-A static agenda page generated from an Outlook or Reclaim-backed ICS calendar feed, deployed via Cloudflare Pages and secured with Cloudflare Access.
+A private, auto-refreshing agenda page generated from an ICS calendar feed. Dark mode by default with a light/dark toggle. Deployed to Cloudflare Pages, secured with Cloudflare Access.
 
-## What this is optimized for
-
-- No Slack app approvals or Microsoft Graph app registration
-- Automatic builds on every push via Cloudflare Pages
-- Private access via Cloudflare Access (email-based authentication)
-- A clean, responsive static page with dark/light mode
+---
 
 ## How it works
 
-1. Publish an Outlook calendar and copy the **ICS** link.
-2. Connect this repo to **Cloudflare Pages**.
-3. Cloudflare builds the site on every push and serves it at your `.pages.dev` URL.
-4. **Cloudflare Access** restricts the site to your email only.
+```
+ICS feed (Outlook / Reclaim / Google)
+        ↓
+  generate_agenda.py      ← parses events, renders HTML
+        ↓
+  site/index.html         ← static output
+        ↓
+  Cloudflare Pages        ← builds on push, serves the page
+        ↓
+  Cloudflare Access       ← email-gated authentication
+```
 
-## Files
+## Features
 
-- `scripts/generate_agenda.py` — downloads the ICS feed and generates `site/index.html`
-- `requirements.txt` — Python dependencies
-- `site/` — generated output (build artifact, not committed)
+- **Timeline UI** — events grouped by day with a vertical timeline, color-coded accent bars, and staggered fade-in animations
+- **Live indicators** — pulsing dot and "Now" / "In progress" badges for current events
+- **Dark / Light mode** — dark by default, toggle persisted in `localStorage`
+- **Auto-refresh** — page reloads every 5 minutes via `<meta http-equiv="refresh">`
+- **Responsive** — optimized for desktop, tablet, and mobile
+- **Glassmorphism** — frosted-glass cards with `backdrop-filter: blur()`
+- **Accessible** — `prefers-reduced-motion` support, semantic HTML, print styles
+
+## Repo structure
+
+```
+.
+├── scripts/
+│   └── generate_agenda.py   # Fetches ICS → generates site/index.html + agenda.json
+├── site/                    # Build output (not committed)
+├── requirements.txt         # icalendar>=6.0.0
+└── README.md
+```
 
 ## Setup
 
-### 1. Get the Outlook ICS link
+### 1. Get your ICS link
 
-- Outlook on the web > **Calendar** > **Settings** > **Shared calendars** > **Publish a calendar**
-- Choose your calendar and detail level, click **Publish**
-- Copy the **ICS** link
+Outlook: **Calendar → Settings → Shared calendars → Publish a calendar** → copy the **ICS** URL.
 
-If you do not see this option, your tenant probably has calendar publishing restricted.
+### 2. Deploy to Cloudflare Pages
 
-### 2. Connect to Cloudflare Pages
+1. **Cloudflare dashboard** → Workers & Pages → Create → Pages → Connect to Git
+2. Select this repo
+3. Build configuration:
 
-1. Go to Cloudflare dashboard > **Workers & Pages** > **Create** > **Pages** > **Connect to Git**
-2. Select this repository
-3. Build settings:
-   - **Framework preset:** None
-   - **Build command:** `pip install -r requirements.txt && python scripts/generate_agenda.py`
-   - **Build output directory:** `site`
-4. Add environment variables:
-   - `ICS_URL` (required) — your Outlook-published ICS URL
-   - `AGENDA_TITLE` — defaults to `Live Agenda`
-   - `AGENDA_TIMEZONE` — defaults to `America/Los_Angeles`
-   - `WINDOW_HOURS` — defaults to `48`
-   - `MAX_EVENTS` — defaults to `40`
-5. Click **Deploy**
+   | Field | Value |
+   |---|---|
+   | Framework preset | None |
+   | Build command | `pip install -r requirements.txt && python scripts/generate_agenda.py` |
+   | Output directory | `site` |
 
-### 3. Restrict access with Cloudflare Access
+4. Environment variables:
 
-1. Go to **one.dash.cloudflare.com** (Zero Trust dashboard)
-2. **Access** > **Applications** > **Add an application** > **Self-hosted**
-3. Set the application domain to your `.pages.dev` URL
-4. Create a policy: **Allow** > **Selector: Emails** > enter your email
-5. Save
+   | Variable | Required | Default |
+   |---|---|---|
+   | `ICS_URL` | **Yes** | — |
+   | `AGENDA_TITLE` | No | `Live Agenda` |
+   | `AGENDA_TIMEZONE` | No | `America/Los_Angeles` |
+   | `WINDOW_HOURS` | No | `48` |
+   | `MAX_EVENTS` | No | `40` |
 
-Anyone visiting the site will need a one-time code sent to the allowed email.
+5. Deploy
 
-## Tuning
+### 3. Lock it down with Cloudflare Access
 
-### Time window
+1. **one.dash.cloudflare.com** → Access → Applications → Add → Self-hosted
+2. Domain: your `.pages.dev` URL
+3. Policy: **Allow** → Selector: **Emails** → your email
+4. Save — visitors now need a one-time email code
 
-The page shows the next 48 hours by default. Change `WINDOW_HOURS` in your Cloudflare Pages environment variables.
-
-### Browser refresh
-
-The generated page auto-refreshes every 5 minutes.
-
-### Rebuild frequency
-
-The site rebuilds on every push. To trigger a rebuild without code changes, go to **Cloudflare Pages > your project > Deployments > Retry deployment**.
-
-## Local testing
+## Local dev
 
 ```bash
-export ICS_URL='https://example.com/path/to/calendar.ics'
-export AGENDA_TIMEZONE='America/Los_Angeles'
+export ICS_URL='https://...'
 pip install -r requirements.txt
 python scripts/generate_agenda.py
+open site/index.html
 ```
 
-Then open `site/index.html`.
+## Triggering a rebuild
 
-## Troubleshooting
+The site rebuilds automatically on every push. To rebuild without code changes:
 
-### Build fails
-
-Check the build logs in **Cloudflare Pages > your project > Deployments**. The most common cause is a missing `ICS_URL` environment variable.
-
-### Feed blocked or expired
-
-If Outlook rotates or revokes the published link, update the `ICS_URL` environment variable in Cloudflare Pages settings.
+**Cloudflare Pages → Deployments → Retry deployment**
