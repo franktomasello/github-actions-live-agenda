@@ -790,15 +790,35 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     .hero {{
       margin-bottom: 44px;
     }}
+    @keyframes title-shimmer {{
+      0% {{ background-position: -200% center; }}
+      100% {{ background-position: 200% center; }}
+    }}
     .hero h1 {{
-      font-size: clamp(1.85rem, 4.5vw, 2.5rem);
-      font-weight: 750;
-      letter-spacing: -0.04em;
-      line-height: 1.1;
-      background: linear-gradient(135deg, var(--text) 0%, var(--text-2) 100%);
+      font-size: clamp(2rem, 5vw, 2.8rem);
+      font-weight: 800;
+      letter-spacing: -0.045em;
+      line-height: 1.08;
+      background: linear-gradient(
+        135deg,
+        #0a84ff 0%, #5ac8fa 25%, #bf5af2 50%, #ff375f 75%, #0a84ff 100%
+      );
+      background-size: 200% auto;
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
+      animation: title-shimmer 8s linear infinite;
+    }}
+    [data-theme="light"] .hero h1 {{
+      background: linear-gradient(
+        135deg,
+        #007aff 0%, #34aadc 25%, #af52de 50%, #ff2d55 75%, #007aff 100%
+      );
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: title-shimmer 8s linear infinite;
     }}
     .hero-top {{
       display: flex;
@@ -1265,7 +1285,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     /* ── Mobile ── */
     @media (max-width: 600px) {{
       .wrap {{ padding: 32px 18px 72px; }}
-      .hero h1 {{ font-size: 1.65rem; }}
+      .hero h1 {{ font-size: 1.8rem; }}
       .clock-time {{ font-size: 1.25rem; }}
       .timeline {{ padding-left: 20px; }}
       .tl-marker {{ left: -20px; }}
@@ -1338,6 +1358,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .theme-toggle, .theme-toggle svg {{ transition: none; }}
       .progress-fill, .progress-glow {{ transition: none; }}
       .progress-glow {{ box-shadow: none; }}
+      .hero h1 {{ animation: none; background-size: auto; }}
     }}
   </style>
 </head>
