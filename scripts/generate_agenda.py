@@ -14,6 +14,241 @@ from urllib.request import Request, urlopen
 from icalendar import Calendar
 from zoneinfo import ZoneInfo
 
+# ── Client-side renderer ──────────────────────────────────────────────────────
+# Raw string so normal JS braces don't need escaping in the f-string template.
+# Injected after a small <script> block that sets __AGENDA_TZ__ and
+# __AGENDA_WINDOW_HOURS__ from the Python build-time env vars.
+_RENDER_JS = r"""
+(function () {
+  'use strict';
+  var TZ           = window.__AGENDA_TZ__;
+  var WINDOW_HOURS = window.__AGENDA_WINDOW_HOURS__;
+  var POLL_MS      = 30_000;   // fetch fresh data from /api/events every 30 s
+  var TICK_MS      = 60_000;   // re-render countdowns every 60 s
+
+  var currentSig   = null;     // JSON signature of last-seen event list
+  var currentData  = null;     // last-seen event array
+  var tickTimer    = null;
+
+  // ── HTML helpers ────────────────────────────────────────────────────────────
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // ── Time helpers ────────────────────────────────────────────────────────────
+  function fmtTime(isoStr) {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: TZ, hour: 'numeric', minute: '2-digit', hour12: true,
+    }).format(new Date(isoStr));
+  }
+
+  function fmtTimeRange(s, e) { return fmtTime(s) + ' \u2013 ' + fmtTime(e); }
+
+  function durStr(s, e) {
+    var m = Math.round((new Date(e) - new Date(s)) / 60_000);
+    if (m < 60) return m + 'm';
+    var h = Math.floor(m / 60), r = m % 60;
+    return r ? h + 'h ' + r + 'm' : h + 'h';
+  }
+
+  function timeUntil(s, e, isAllDay, now) {
+    if (isAllDay) return '';
+    var start = new Date(s), end = new Date(e);
+    if (end < now) return '';
+    var diff = Math.floor((start - now) / 60_000);
+    if (diff < -5)  return 'In progress';
+    if (diff <= 0)  return 'Now';
+    if (diff < 60)  return 'in ' + diff + ' min';
+    var h = Math.floor(diff / 60), r = diff % 60;
+    return r ? 'in ' + h + 'h ' + r + 'm' : 'in ' + h + 'h';
+  }
+
+  function accent(s, isAllDay) {
+    if (isAllDay) return '#af52de';
+    var h = +new Intl.DateTimeFormat('en', {
+      timeZone: TZ, hour: 'numeric', hour12: false,
+    }).format(new Date(s)) % 24;
+    return h < 12 ? '#ff9f0a' : h < 17 ? '#007aff' : '#5e5ce6';
+  }
+
+  var _dateFmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+  });
+  function localDate(isoStr) { return _dateFmt.format(new Date(isoStr)); }
+
+  function sectionTitle(s, now) {
+    var d = localDate(s), t = localDate(now.toISOString());
+    var tmr = localDate(new Date(now.getTime() + 86_400_000).toISOString());
+    if (d === t)   return 'Today';
+    if (d === tmr) return 'Tomorrow';
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: TZ, weekday: 'long', month: 'short', day: 'numeric',
+    }).format(new Date(s));
+  }
+
+  // ── SVG icons ───────────────────────────────────────────────────────────────
+  var LOC_ICON   = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>';
+  var NOTES_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
+
+  // ── Card & section rendering ────────────────────────────────────────────────
+  function renderCard(ev, isLast, delay, now) {
+    var rel       = timeUntil(ev.start, ev.end, ev.isAllDay, now);
+    var isNow     = rel === 'Now' || rel === 'In progress';
+    var timeDisp  = ev.isAllDay ? 'All day' : fmtTime(ev.start);
+    var rangeDisp = ev.isAllDay ? 'All day' : fmtTimeRange(ev.start, ev.end);
+    var dur       = ev.isAllDay ? '' : durStr(ev.start, ev.end);
+    var clr       = accent(ev.start, ev.isAllDay);
+
+    var desc = ev.description
+      ? ev.description.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')
+      : '';
+
+    return (
+      '<div class="tl-item' + (isNow ? ' is-now' : '') + (isLast ? ' is-last' : '') + ' fade-in"'
+        + ' style="animation-delay:' + delay + 'ms">'
+      + '<div class="tl-marker">' + (isNow ? '<span class="pulse"></span>' : '<span class="dot"></span>') + '</div>'
+      + '<article class="card" style="--accent-bar:' + clr + '">'
+      + '<div class="card-top">'
+      + '<div class="card-time"><span class="t">' + esc(timeDisp) + '</span>'
+        + (dur ? '<span class="dur">' + esc(dur) + '</span>' : '') + '</div>'
+      + '<div class="card-meta-right">'
+        + (isNow ? '<span class="badge live">' + esc(rel) + '</span>' : '')
+        + (rel && !isNow ? '<span class="countdown">' + esc(rel) + '</span>' : '')
+      + '</div></div>'
+      + '<h3>' + esc(ev.title) + '</h3>'
+      + '<div class="range">' + esc(rangeDisp) + '</div>'
+      + (ev.location ? '<div class="loc">' + LOC_ICON + '<span>' + esc(ev.location) + '</span></div>' : '')
+      + (ev.description ? '<details><summary>' + NOTES_ICON + ' Notes</summary><div class="notes">' + desc + '</div></details>' : '')
+      + '</article></div>'
+    );
+  }
+
+  function renderSection(heading, evts, idx, now) {
+    var isToday = heading === 'Today';
+    var cards = '', i;
+    for (i = 0; i < evts.length; i++) {
+      cards += renderCard(evts[i], i === evts.length - 1, idx * 40, now);
+      idx++;
+    }
+    var dateSub = (!isToday && heading !== 'Tomorrow' && evts.length > 0)
+      ? '<span class="day-date">' + esc(new Intl.DateTimeFormat('en-US', {
+          timeZone: TZ, month: 'long', day: 'numeric', year: 'numeric',
+        }).format(new Date(evts[0].start))) + '</span>'
+      : '';
+    return {
+      html: '<section class="day-group">'
+        + '<div class="day-head' + (isToday ? ' is-today' : '') + '">'
+        + '<h2>' + esc(heading) + '</h2>' + dateSub
+        + '<span class="cnt">' + evts.length + '</span></div>'
+        + '<div class="timeline">' + cards + '</div></section>',
+      idx: idx,
+    };
+  }
+
+  // ── Full DOM update ─────────────────────────────────────────────────────────
+  function renderAll(events) {
+    var now = new Date();
+
+    // Filter out events that ended since the last fetch
+    events = events.filter(function (e) { return new Date(e.end) >= now; });
+
+    // Hero "Updated" line
+    var sub = document.querySelector('.hero-sub');
+    if (sub) {
+      var tp = new Intl.DateTimeFormat('en-US', {
+        timeZone: TZ, weekday: 'long', month: 'short', day: 'numeric',
+        hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short',
+      }).formatToParts(now);
+      var get = function (type) { return (tp.find(function (p) { return p.type === type; }) || {}).value || ''; };
+      sub.textContent = 'Updated ' + get('weekday') + ', ' + get('month') + ' ' + get('day')
+        + ' at ' + get('hour') + ':' + get('minute') + ' ' + get('dayPeriod') + ' ' + get('timeZoneName');
+    }
+
+    // Event-count chip
+    var chips = document.querySelectorAll('.chip');
+    if (chips.length >= 3) chips[2].textContent = events.length + ' event' + (events.length !== 1 ? 's' : '');
+
+    // Group by section
+    var grouped = {}, order = [];
+    events.forEach(function (e) {
+      var h = sectionTitle(e.start, now);
+      if (!grouped[h]) { grouped[h] = []; order.push(h); }
+      grouped[h].push(e);
+    });
+
+    // Render sections
+    var html = '', idx = 0;
+    if (order.length === 0) {
+      html = '<section class="day-group fade-in"><div class="empty-state">'
+        + '<div class="empty-icon"><svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/></svg></div>'
+        + '<h2>All clear</h2><p>Nothing on the books for the next ' + WINDOW_HOURS + ' hours.</p>'
+        + '</div></section>';
+    } else {
+      order.forEach(function (h) {
+        var r = renderSection(h, grouped[h], idx, now);
+        html += r.html; idx = r.idx;
+      });
+    }
+    var container = document.getElementById('agenda-events');
+    if (container) container.innerHTML = html;
+
+    // Hero next-up
+    var heroWrap = document.getElementById('hero-next-wrap');
+    if (heroWrap) {
+      if (events.length > 0) {
+        var next = events[0];
+        var rel  = timeUntil(next.start, next.end, next.isAllDay, now);
+        var isNow = rel === 'Now' || rel === 'In progress';
+        heroWrap.innerHTML = '<div class="hero-next fade-in" style="animation-delay:60ms">'
+          + '<span class="hero-next-label">' + (isNow ? 'Live' : 'Next') + '</span>'
+          + '<span class="hero-next-title">' + esc(next.title) + '</span>'
+          + (isNow
+            ? '<span class="hero-live">'  + esc(rel) + '</span>'
+            : '<span class="hero-eta">'   + esc(rel) + '</span>')
+          + '</div>';
+      } else {
+        heroWrap.innerHTML = '';
+      }
+    }
+  }
+
+  // ── Data fetching & polling ─────────────────────────────────────────────────
+  function sig(events) {
+    return JSON.stringify(events.map(function (e) {
+      return e.title + '|' + e.start + '|' + e.end + '|' + e.location;
+    }));
+  }
+
+  function fetchAndUpdate() {
+    fetch('/api/events?_=' + Date.now())
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (data) {
+        var events = data.events || [];
+        var s = sig(events);
+        var changed = s !== currentSig;
+        currentSig  = s;
+        currentData = events;
+        if (changed) renderAll(events);
+      })
+      .catch(function () {}); // silently ignore transient errors
+  }
+
+  function tick() {
+    // Re-render existing data so countdowns stay accurate between fetches
+    if (currentData) renderAll(currentData);
+  }
+
+  // Initial render immediately, then poll every 30 s
+  fetchAndUpdate();
+  setInterval(fetchAndUpdate, POLL_MS);
+
+  // Re-render countdowns every minute without fetching
+  tickTimer = setInterval(tick, TICK_MS);
+})();
+"""
+
 
 @dataclass(slots=True)
 class Event:
@@ -875,11 +1110,11 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
         <span class="chip">{_esc(TIMEZONE)}</span>
         <span class="chip">{total_events} event{"s" if total_events != 1 else ""}</span>
       </div>
-      {hero_next}
+      <div id="hero-next-wrap">{hero_next}</div>
     </div>
-    {''.join(sections)}
+    <div id="agenda-events">{''.join(sections)}</div>
     <footer>
-      Rebuilt every&nbsp;5&nbsp;min &middot; Updates detected automatically
+      Live data &middot; Updates every&nbsp;30&nbsp;s
     </footer>
   </main>
   <button class="theme-toggle" aria-label="Toggle light/dark mode" title="Toggle theme">
@@ -899,27 +1134,12 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       else{{root.setAttribute('data-theme','light');localStorage.setItem(KEY,'light');}}
     }});
   }})();
-
-  // Poll /agenda.json every 60 s; reload only when data actually changes.
-  (function(){{
-    var POLL_MS = 60000;
-    var baseline = null;
-    function check(){{
-      fetch('/agenda.json?_=' + Date.now())
-        .then(function(r){{ return r.text(); }})
-        .then(function(text){{
-          try {{
-            var sig = JSON.stringify(JSON.parse(text));
-            if(baseline === null){{ baseline = sig; }}
-            else if(sig !== baseline){{ location.reload(); }}
-          }} catch(e){{}}
-        }})
-        .catch(function(){{}});
-    }}
-    // Establish baseline after page settles, then poll every minute.
-    setTimeout(function(){{ check(); setInterval(check, POLL_MS); }}, 10000);
-  }})();
   </script>
+  <script>
+  window.__AGENDA_TZ__ = {json.dumps(TIMEZONE)};
+  window.__AGENDA_WINDOW_HOURS__ = {WINDOW_HOURS};
+  </script>
+  <script>{_RENDER_JS}</script>
 </body>
 </html>
 """
