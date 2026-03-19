@@ -43,12 +43,28 @@ _RENDER_JS = r"""
   var _fmtHour = new Intl.DateTimeFormat('en', {
     timeZone: TZ, hour: 'numeric', hour12: false,
   });
-  var _fmtClock = new Intl.DateTimeFormat('en-US', {
-    timeZone: TZ, hour: 'numeric', minute: '2-digit', hour12: true,
+  var _fmtClockHr = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ, hour: 'numeric', hour12: true,
+  });
+  var _fmtClockMin = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ, minute: '2-digit',
+  });
+  var _fmtClockPeriod = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ, hour: 'numeric', hour12: true, hourCycle: 'h12',
   });
   var _fmtClockDate = new Intl.DateTimeFormat('en-US', {
     timeZone: TZ, weekday: 'long', month: 'short', day: 'numeric',
   });
+
+  // ── Clock helpers (avoid innerHTML to preserve CSS animations) ─────────────
+  function clockParts(now) {
+    var hr = _fmtClockHr.format(now).replace(/\s*[APap][Mm]\s*/, '');
+    var min = _fmtClockMin.format(now);
+    if (min.length < 2) min = '0' + min;
+    var full = _fmtClockPeriod.format(now);
+    var period = full.match(/[APap][Mm]/);
+    return { hr: hr, min: min, period: period ? period[0] : '' };
+  }
 
   // ── HTML helpers ────────────────────────────────────────────────────────────
   function esc(s) {
@@ -72,11 +88,13 @@ _RENDER_JS = r"""
     if (isAllDay) return '';
     var start = new Date(s), end = new Date(e);
     if (end < now) return '';
-    var diff = Math.floor((start - now) / 60000);
-    if (diff < -5)  return 'In progress';
-    if (diff <= 0)  return 'Now';
-    if (diff < 60)  return 'in ' + diff + ' min';
-    var h = Math.floor(diff / 60), r = diff % 60;
+    var diffSec = Math.floor((start - now) / 1000);
+    var diffMin = Math.floor(diffSec / 60);
+    if (diffMin < -5)  return 'In progress';
+    if (diffSec <= 0)  return 'Now';
+    if (diffSec < 60)  return 'in ' + diffSec + 's';
+    if (diffMin < 60)  return 'in ' + diffMin + ' min';
+    var h = Math.floor(diffMin / 60), r = diffMin % 60;
     return r ? 'in ' + h + 'h ' + r + 'm' : 'in ' + h + 'h';
   }
 
@@ -87,15 +105,18 @@ _RENDER_JS = r"""
     var total = end - start;
     var elapsed = now - start;
     var pct = Math.min(100, Math.max(0, (elapsed / total) * 100));
-    var remainMin = Math.max(0, Math.ceil((end - now) / 60000));
+    var remainSec = Math.max(0, Math.ceil((end - now) / 1000));
+    var remainMin = Math.ceil(remainSec / 60);
     var remainStr;
-    if (remainMin < 60) {
+    if (remainSec < 60) {
+      remainStr = remainSec + 's left';
+    } else if (remainMin < 60) {
       remainStr = remainMin + 'm left';
     } else {
       var h = Math.floor(remainMin / 60), r = remainMin % 60;
       remainStr = r ? h + 'h ' + r + 'm left' : h + 'h left';
     }
-    return { pct: Math.round(pct), remainStr: remainStr };
+    return { pct: Math.round(pct * 10) / 10, remainStr: remainStr };
   }
 
   function accent(s, isAllDay) {
@@ -192,10 +213,11 @@ _RENDER_JS = r"""
     var now = new Date();
     events = events.filter(function (e) { return new Date(e.end) >= now; });
 
-    // Live clock
-    var clockTime = document.getElementById('clock-time');
+    // Live clock — set innerHTML once with span structure
+    var clockEl = document.getElementById('clock-time');
     var clockDate = document.getElementById('clock-date');
-    if (clockTime) clockTime.innerHTML = _fmtClock.format(now).replace(':', '<span class="clock-sep">:</span>');
+    var cp = clockParts(now);
+    if (clockEl) clockEl.innerHTML = '<span class="clock-hr">' + cp.hr + '</span><span class="clock-sep">:</span><span class="clock-min">' + cp.min + '</span><span class="clock-period">' + cp.period + '</span>';
     if (clockDate) clockDate.textContent = _fmtClockDate.format(now);
 
     // Event-count chip
@@ -252,10 +274,15 @@ _RENDER_JS = r"""
     var now = new Date();
     var needsFullRender = false;
 
-    // Update clock
-    var clockTime = document.getElementById('clock-time');
+    // Update clock — textContent only, preserves blink animation on separator
+    var cp = clockParts(now);
+    var clockHr = document.querySelector('.clock-hr');
+    var clockMin = document.querySelector('.clock-min');
+    var clockPer = document.querySelector('.clock-period');
     var clockDate = document.getElementById('clock-date');
-    if (clockTime) clockTime.innerHTML = _fmtClock.format(now).replace(':', '<span class="clock-sep">:</span>');
+    if (clockHr)  clockHr.textContent  = cp.hr;
+    if (clockMin) clockMin.textContent = cp.min;
+    if (clockPer) clockPer.textContent = cp.period;
     if (clockDate) clockDate.textContent = _fmtClockDate.format(now);
 
     // Update event count chip
@@ -275,10 +302,10 @@ _RENDER_JS = r"""
       var rel = timeUntil(start, end, allDay, now);
       var wasNow = item.classList.contains('is-now');
       var isNow = rel === 'Now' || rel === 'In progress';
-      var isEnded = new Date(end) < now;
+      var justEnded = new Date(end) < now && wasNow;
 
       // State transition (upcoming→now, now→ended) — rebuild once
-      if (isNow !== wasNow || isEnded) { needsFullRender = true; break; }
+      if (isNow !== wasNow || justEnded) { needsFullRender = true; break; }
 
       // Update countdown text
       var countdown = item.querySelector('.countdown');
@@ -829,10 +856,26 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       color: var(--text);
       font-variant-numeric: tabular-nums;
       font-feature-settings: "tnum";
+      display: flex;
+      align-items: baseline;
+      gap: 0;
     }}
-    .clock-time .clock-sep {{
+    .clock-hr, .clock-min {{
+      display: inline-block;
+      min-width: 0;
+    }}
+    .clock-sep {{
       animation: clock-separator-blink 1s ease-in-out infinite;
-      display: inline;
+      display: inline-block;
+      margin: 0 1px;
+    }}
+    .clock-period {{
+      font-size: 0.55rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: var(--text-3);
+      margin-left: 4px;
+      text-transform: uppercase;
     }}
     .clock-divider {{
       width: 32px;
@@ -1290,6 +1333,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .hero-top {{ align-items: flex-start; }}
       .clock {{ padding: 12px 16px; min-width: 110px; border-radius: 14px; }}
       .clock-time {{ font-size: 1.4rem; }}
+      .clock-period {{ font-size: 0.48rem; margin-left: 3px; }}
       .clock-divider {{ width: 24px; margin: 7px 0; }}
       .clock-date {{ font-size: 0.58rem; }}
       .hero-chips {{ margin-top: 18px; gap: 6px; }}
