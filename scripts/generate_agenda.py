@@ -22,7 +22,7 @@ _RENDER_JS = r"""
   var TZ           = window.__AGENDA_TZ__;
   var WINDOW_HOURS = window.__AGENDA_WINDOW_HOURS__;
   var POLL_MS      = 30000;
-  var TICK_MS      = 10000;
+  var TICK_MS      = 1000;
 
   var currentSig   = null;
   var currentData  = null;
@@ -147,6 +147,7 @@ _RENDER_JS = r"""
 
     return (
       '<div class="tl-item' + (isNow ? ' is-now' : '') + (isLast ? ' is-last' : '') + ' fade-in"'
+        + ' data-start="' + esc(ev.start) + '" data-end="' + esc(ev.end) + '" data-allday="' + (ev.isAllDay ? '1' : '0') + '"'
         + ' style="animation-delay:' + delay + 'ms">'
       + '<div class="tl-marker">' + (isNow ? '<span class="pulse"></span>' : '<span class="dot"></span>') + '</div>'
       + '<article class="card" style="--accent-bar:' + clr + '">'
@@ -245,9 +246,73 @@ _RENDER_JS = r"""
     }
   }
 
-  // ── Tick — full re-render so state transitions (e.g. "in 1 min" → "Now") work ─
+  // ── Tick — seamless in-place DOM updates (no innerHTML replacement) ─────────
   function tick() {
-    if (currentData) renderAll(currentData);
+    if (!currentData) return;
+    var now = new Date();
+    var needsFullRender = false;
+
+    // Update clock
+    var clockTime = document.getElementById('clock-time');
+    var clockDate = document.getElementById('clock-date');
+    if (clockTime) clockTime.textContent = _fmtClock.format(now);
+    if (clockDate) clockDate.textContent = _fmtClockDate.format(now);
+
+    // Update event count chip
+    var activeEvents = currentData.filter(function (e) { return new Date(e.end) >= now; });
+    var chips = document.querySelectorAll('.chip');
+    if (chips.length >= 3) chips[2].textContent = activeEvents.length + ' event' + (activeEvents.length !== 1 ? 's' : '');
+
+    // Update each card in-place
+    var items = document.querySelectorAll('.tl-item');
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var start = item.getAttribute('data-start');
+      var end = item.getAttribute('data-end');
+      var allDay = item.getAttribute('data-allday') === '1';
+      if (!start || !end) continue;
+
+      var rel = timeUntil(start, end, allDay, now);
+      var wasNow = item.classList.contains('is-now');
+      var isNow = rel === 'Now' || rel === 'In progress';
+      var isEnded = new Date(end) < now;
+
+      // State transition (upcoming→now, now→ended) — rebuild once
+      if (isNow !== wasNow || isEnded) { needsFullRender = true; break; }
+
+      // Update countdown text
+      var countdown = item.querySelector('.countdown');
+      if (countdown) countdown.textContent = rel;
+
+      // Update live badge text
+      var badge = item.querySelector('.badge.live');
+      if (badge) badge.textContent = rel;
+
+      // Update progress bar
+      var prog = progressInfo(start, end, allDay, now);
+      if (prog) {
+        var fill = item.querySelector('.progress-fill');
+        var glow = item.querySelector('.progress-glow');
+        var pct = item.querySelector('.progress-pct');
+        var remain = item.querySelector('.progress-remain');
+        if (fill) fill.style.width = prog.pct + '%';
+        if (glow) glow.style.left = prog.pct + '%';
+        if (pct) pct.textContent = prog.pct + '%';
+        if (remain) remain.textContent = prog.remainStr;
+      }
+    }
+
+    // Update hero next-up in-place
+    if (!needsFullRender && activeEvents.length > 0) {
+      var next = activeEvents[0];
+      var heroRel = timeUntil(next.start, next.end, next.isAllDay, now);
+      var heroEta = document.querySelector('.hero-eta');
+      var heroLive = document.querySelector('.hero-live');
+      if (heroEta) heroEta.textContent = heroRel;
+      if (heroLive) heroLive.textContent = heroRel;
+    }
+
+    if (needsFullRender) renderAll(currentData);
   }
 
   // ── Data fetching & polling ─────────────────────────────────────────────────
