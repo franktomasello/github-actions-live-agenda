@@ -195,7 +195,7 @@ _RENDER_JS = r"""
     // Live clock
     var clockTime = document.getElementById('clock-time');
     var clockDate = document.getElementById('clock-date');
-    if (clockTime) clockTime.textContent = _fmtClock.format(now);
+    if (clockTime) clockTime.innerHTML = _fmtClock.format(now).replace(':', '<span class="clock-sep">:</span>');
     if (clockDate) clockDate.textContent = _fmtClockDate.format(now);
 
     // Event-count chip
@@ -255,7 +255,7 @@ _RENDER_JS = r"""
     // Update clock
     var clockTime = document.getElementById('clock-time');
     var clockDate = document.getElementById('clock-date');
-    if (clockTime) clockTime.textContent = _fmtClock.format(now);
+    if (clockTime) clockTime.innerHTML = _fmtClock.format(now).replace(':', '<span class="clock-sep">:</span>');
     if (clockDate) clockDate.textContent = _fmtClockDate.format(now);
 
     // Update event count chip
@@ -790,35 +790,21 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     .hero {{
       margin-bottom: 44px;
     }}
-    @keyframes title-shimmer {{
-      0% {{ background-position: -200% center; }}
-      100% {{ background-position: 200% center; }}
-    }}
     .hero h1 {{
       font-size: clamp(2rem, 5vw, 2.8rem);
       font-weight: 800;
       letter-spacing: -0.045em;
       line-height: 1.08;
-      background: linear-gradient(
-        135deg,
-        #0a84ff 0%, #5ac8fa 25%, #bf5af2 50%, #ff375f 75%, #0a84ff 100%
-      );
-      background-size: 200% auto;
+      background: linear-gradient(135deg, #f5f5f7 0%, #a1a1a6 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
-      animation: title-shimmer 8s linear infinite;
     }}
     [data-theme="light"] .hero h1 {{
-      background: linear-gradient(
-        135deg,
-        #007aff 0%, #34aadc 25%, #af52de 50%, #ff2d55 75%, #007aff 100%
-      );
-      background-size: 200% auto;
+      background: linear-gradient(135deg, #1c1c1e 0%, #636366 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
-      animation: title-shimmer 8s linear infinite;
     }}
     .hero-top {{
       display: flex;
@@ -826,27 +812,51 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       justify-content: space-between;
       gap: 16px;
     }}
+    @keyframes clock-separator-blink {{
+      0%, 100% {{ opacity: 1; }}
+      50% {{ opacity: 0.3; }}
+    }}
     .clock {{
       display: flex;
       flex-direction: column;
-      align-items: flex-end;
+      align-items: center;
       flex-shrink: 0;
-      padding-top: 4px;
+      padding: 14px 20px;
+      background: var(--surface);
+      border: 1px solid var(--border-2);
+      border-radius: 16px;
+      box-shadow: var(--card-shadow);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      min-width: 130px;
+      gap: 0;
     }}
     .clock-time {{
-      font-size: 1.6rem;
-      font-weight: 720;
-      letter-spacing: -0.03em;
+      font-size: 1.8rem;
+      font-weight: 760;
+      letter-spacing: -0.035em;
       line-height: 1;
       color: var(--text);
       font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum";
+    }}
+    .clock-time .clock-sep {{
+      animation: clock-separator-blink 1s ease-in-out infinite;
+      display: inline;
+    }}
+    .clock-divider {{
+      width: 36px;
+      height: 1px;
+      background: var(--border-2);
+      margin: 8px 0;
+      border-radius: 1px;
     }}
     .clock-date {{
-      font-size: 0.72rem;
-      font-weight: 420;
+      font-size: 0.68rem;
+      font-weight: 500;
       color: var(--text-3);
-      margin-top: 4px;
-      letter-spacing: 0.005em;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
     }}
 
     .hero-chips {{
@@ -1286,7 +1296,10 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     @media (max-width: 600px) {{
       .wrap {{ padding: 32px 18px 72px; }}
       .hero h1 {{ font-size: 1.8rem; }}
-      .clock-time {{ font-size: 1.25rem; }}
+      .clock {{ padding: 10px 14px; min-width: 105px; border-radius: 12px; }}
+      .clock-time {{ font-size: 1.35rem; }}
+      .clock-divider {{ width: 28px; margin: 6px 0; }}
+      .clock-date {{ font-size: 0.6rem; }}
       .timeline {{ padding-left: 20px; }}
       .tl-marker {{ left: -20px; }}
       .tl-item::before {{ left: -14px; }}
@@ -1358,7 +1371,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .theme-toggle, .theme-toggle svg {{ transition: none; }}
       .progress-fill, .progress-glow {{ transition: none; }}
       .progress-glow {{ box-shadow: none; }}
-      .hero h1 {{ animation: none; background-size: auto; }}
+      .clock-time .clock-sep {{ animation: none; opacity: 1; }}
     }}
   </style>
 </head>
@@ -1369,6 +1382,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
         <h1>{_esc(TITLE)}</h1>
         <div class="clock" aria-live="polite" aria-label="Current time">
           <span class="clock-time" id="clock-time"></span>
+          <div class="clock-divider"></div>
           <span class="clock-date" id="clock-date"></span>
         </div>
       </div>
