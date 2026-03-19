@@ -40,10 +40,6 @@ _RENDER_JS = r"""
   var _fmtLongDate = new Intl.DateTimeFormat('en-US', {
     timeZone: TZ, month: 'long', day: 'numeric', year: 'numeric',
   });
-  var _fmtUpdated = new Intl.DateTimeFormat('en-US', {
-    timeZone: TZ, weekday: 'long', month: 'short', day: 'numeric',
-    hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short',
-  });
   var _fmtHour = new Intl.DateTimeFormat('en', {
     timeZone: TZ, hour: 'numeric', hour12: false,
   });
@@ -156,15 +152,6 @@ _RENDER_JS = r"""
     var now = new Date();
     events = events.filter(function (e) { return new Date(e.end) >= now; });
 
-    // Hero "Updated" line
-    var sub = document.querySelector('.hero-sub');
-    if (sub) {
-      var tp = _fmtUpdated.formatToParts(now);
-      var get = function (type) { return (tp.find(function (p) { return p.type === type; }) || {}).value || ''; };
-      sub.textContent = 'Updated ' + get('weekday') + ', ' + get('month') + ' ' + get('day')
-        + ' at ' + get('hour') + ':' + get('minute') + ' ' + get('dayPeriod') + ' ' + get('timeZoneName');
-    }
-
     // Event-count chip
     var chips = document.querySelectorAll('.chip');
     if (chips.length >= 3) chips[2].textContent = events.length + ' event' + (events.length !== 1 ? 's' : '');
@@ -245,14 +232,6 @@ _RENDER_JS = r"""
       if (badge) badge.textContent = rel;
     }
 
-    // Update "Updated" timestamp
-    var sub = document.querySelector('.hero-sub');
-    if (sub) {
-      var tp = _fmtUpdated.formatToParts(now);
-      var get = function (type) { return (tp.find(function (p) { return p.type === type; }) || {}).value || ''; };
-      sub.textContent = 'Updated ' + get('weekday') + ', ' + get('month') + ' ' + get('day')
-        + ' at ' + get('hour') + ':' + get('minute') + ' ' + get('dayPeriod') + ' ' + get('timeZoneName');
-    }
   }
 
   // ── Data fetching & polling ─────────────────────────────────────────────────
@@ -410,9 +389,6 @@ def format_time_short(event: Event) -> str:
         return "All day"
     return _fmt(event.start, "%-I:%M %p", "%#I:%M %p")
 
-
-def human_updated(ts: datetime) -> str:
-    return _fmt(ts, "%A, %b %-d at %-I:%M %p %Z", "%A, %b %#d at %#I:%M %p %Z")
 
 
 def time_until(event: Event, now: datetime) -> str:
@@ -683,13 +659,6 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
-    }}
-    .hero-sub {{
-      color: var(--text-3);
-      font-size: 0.82rem;
-      margin-top: 8px;
-      font-weight: 420;
-      letter-spacing: 0.005em;
     }}
     .hero-chips {{
       display: flex;
@@ -1150,7 +1119,6 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
   <main class="wrap">
     <div class="hero fade-in">
       <h1>{_esc(TITLE)}</h1>
-      <p class="hero-sub">Updated {_esc(human_updated(now))}</p>
       <div class="hero-chips">
         <span class="chip">{WINDOW_HOURS}h window</span>
         <span class="chip">{_esc(TIMEZONE)}</span>
