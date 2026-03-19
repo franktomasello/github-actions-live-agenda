@@ -812,17 +812,17 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     }}
 
     .wrap {{
-      max-width: 640px;
+      max-width: 680px;
       margin: 0 auto;
-      padding: 64px 28px 100px;
+      padding: 72px 32px 100px;
     }}
 
     /* ── Header ── */
     .hero {{
-      margin-bottom: 48px;
+      margin-bottom: 52px;
     }}
     .hero h1 {{
-      font-size: clamp(2.1rem, 5.2vw, 3rem);
+      font-size: clamp(2rem, 5vw, 2.8rem);
       font-weight: 800;
       letter-spacing: -0.05em;
       line-height: 1.05;
@@ -832,30 +832,30 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 20px;
+      gap: 24px;
     }}
     @keyframes clock-separator-blink {{
       0%, 100% {{ opacity: 1; }}
-      50% {{ opacity: 0.2; }}
+      50% {{ opacity: 0.15; }}
     }}
     .clock {{
       display: flex;
       flex-direction: column;
       align-items: center;
       flex-shrink: 0;
-      padding: 16px 22px;
+      padding: 14px 20px;
       background: var(--surface);
       border: 1px solid var(--border-2);
-      border-radius: 18px;
-      box-shadow: var(--card-shadow), 0 0 0 1px var(--border);
+      border-radius: 16px;
+      box-shadow: var(--card-shadow);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
-      min-width: 136px;
+      min-width: 130px;
     }}
     .clock-time {{
-      font-size: 1.9rem;
-      font-weight: 760;
-      letter-spacing: -0.04em;
+      font-size: 1.75rem;
+      font-weight: 750;
+      letter-spacing: -0.035em;
       line-height: 1;
       color: var(--text);
       font-variant-numeric: tabular-nums;
@@ -874,21 +874,21 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       margin: 0 1px;
     }}
     .clock-period {{
-      font-size: 0.55rem;
+      font-size: 0.5rem;
       font-weight: 600;
       letter-spacing: 0.04em;
       color: var(--text-3);
-      margin-left: 4px;
+      margin-left: 3px;
       text-transform: uppercase;
     }}
     .clock-divider {{
-      width: 32px;
+      width: 28px;
       height: 1px;
       background: linear-gradient(90deg, transparent, var(--border-2), transparent);
-      margin: 9px 0;
+      margin: 8px 0;
     }}
     .clock-date {{
-      font-size: 0.65rem;
+      font-size: 0.62rem;
       font-weight: 520;
       color: var(--text-3);
       letter-spacing: 0.06em;
@@ -899,7 +899,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      margin-top: 24px;
+      margin-top: 22px;
     }}
     .chip {{
       display: inline-flex;
@@ -907,9 +907,9 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       gap: 4px;
       background: var(--accent-bg);
       color: var(--accent);
-      padding: 6px 14px;
+      padding: 5px 13px;
       border-radius: 999px;
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       font-weight: 560;
       letter-spacing: 0.02em;
       border: 1px solid rgba(10,132,255,.08);
@@ -920,8 +920,8 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       display: flex;
       align-items: center;
       gap: 14px;
-      margin-top: 24px;
-      padding: 14px 20px;
+      margin-top: 20px;
+      padding: 13px 18px;
       background: var(--surface);
       border: 1px solid var(--border-2);
       border-radius: 14px;
@@ -930,7 +930,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       -webkit-backdrop-filter: blur(12px);
     }}
     .hero-next-label {{
-      font-size: 0.6rem;
+      font-size: 0.58rem;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.1em;
@@ -943,7 +943,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     .hero-next-title {{
       flex: 1;
       font-weight: 620;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -951,14 +951,14 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     }}
     .hero-eta {{
       color: var(--text-2);
-      font-size: 0.78rem;
+      font-size: 0.75rem;
       font-weight: 500;
       flex-shrink: 0;
       font-variant-numeric: tabular-nums;
     }}
     .hero-live {{
       color: var(--live-text);
-      font-size: 0.65rem;
+      font-size: 0.62rem;
       font-weight: 720;
       text-transform: uppercase;
       letter-spacing: 0.06em;
@@ -970,7 +970,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
 
     /* ── Day groups ── */
     .day-group {{
-      margin-bottom: 36px;
+      margin-bottom: 40px;
       content-visibility: auto;
       contain-intrinsic-size: auto 400px;
     }}
@@ -981,27 +981,27 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
       padding-left: 2px;
     }}
     .day-head h2 {{
-      font-size: 0.68rem;
+      font-size: 0.66rem;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.07em;
       color: var(--text-2);
     }}
     .day-head.is-today h2 {{
       color: var(--accent);
     }}
     .day-date {{
-      font-size: 0.68rem;
+      font-size: 0.66rem;
       color: var(--text-3);
       font-weight: 420;
     }}
     .cnt {{
       margin-left: auto;
-      font-size: 0.62rem;
+      font-size: 0.6rem;
       font-weight: 620;
       color: var(--text-3);
       background: var(--surface-2);
@@ -1013,12 +1013,12 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     /* ── Timeline ── */
     .timeline {{
       position: relative;
-      padding-left: 26px;
+      padding-left: 28px;
     }}
 
     .tl-item {{
       position: relative;
-      padding-bottom: 12px;
+      padding-bottom: 14px;
     }}
     .tl-item:last-child {{
       padding-bottom: 0;
@@ -1028,8 +1028,8 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     .tl-item::before {{
       content: '';
       position: absolute;
-      left: -19px;
-      top: 14px;
+      left: -20px;
+      top: 16px;
       bottom: 0;
       width: 1.5px;
       background: var(--tl-line);
@@ -1042,8 +1042,8 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     /* Marker */
     .tl-marker {{
       position: absolute;
-      left: -26px;
-      top: 6px;
+      left: -28px;
+      top: 8px;
       width: 14px;
       height: 14px;
       display: flex;
@@ -1077,7 +1077,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--r);
-      padding: 16px 20px 16px 22px;
+      padding: 16px 20px 16px 20px;
       box-shadow: var(--card-shadow);
       transition: box-shadow .25s cubic-bezier(.22,1,.36,1), border-color .25s ease, transform .25s cubic-bezier(.22,1,.36,1);
       overflow: hidden;
@@ -1090,18 +1090,18 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       content: '';
       position: absolute;
       left: 0;
-      top: 14px;
-      bottom: 14px;
+      top: 16px;
+      bottom: 16px;
       width: 3px;
       border-radius: 0 3px 3px 0;
       background: var(--accent-bar, var(--accent));
-      opacity: .55;
+      opacity: .5;
       transition: opacity .2s ease;
     }}
     .card:hover {{
       box-shadow: var(--card-hover);
       border-color: var(--border-2);
-      transform: translateY(-2px);
+      transform: translateY(-1px);
     }}
     .card:hover::before {{
       opacity: 1;
@@ -1119,7 +1119,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }}
     .card-time {{
       display: flex;
@@ -1127,14 +1127,14 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       gap: 8px;
     }}
     .t {{
-      font-size: 0.75rem;
+      font-size: 0.73rem;
       font-weight: 600;
       color: var(--text-2);
       letter-spacing: 0.01em;
       font-variant-numeric: tabular-nums;
     }}
     .dur {{
-      font-size: 0.65rem;
+      font-size: 0.62rem;
       color: var(--text-3);
       font-weight: 480;
       padding: 2px 8px;
@@ -1148,14 +1148,14 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     }}
 
     .card h3 {{
-      font-size: 1rem;
+      font-size: 0.96rem;
       font-weight: 650;
       line-height: 1.35;
-      letter-spacing: -0.018em;
-      margin-bottom: 4px;
+      letter-spacing: -0.015em;
+      margin-bottom: 3px;
     }}
     .range {{
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       color: var(--text-3);
       margin-bottom: 0;
       font-weight: 420;
@@ -1164,19 +1164,19 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
 
     /* ── Progress bar ── */
     .progress-wrap {{
-      margin-top: 14px;
+      margin-top: 12px;
       margin-bottom: 2px;
     }}
     .progress-track {{
       position: relative;
-      height: 4px;
+      height: 3px;
       background: var(--surface-2);
-      border-radius: 4px;
+      border-radius: 3px;
       overflow: visible;
     }}
     .progress-fill {{
       height: 100%;
-      border-radius: 4px;
+      border-radius: 3px;
       background: linear-gradient(90deg, var(--live) 0%, #5af078 100%);
       transition: width .8s cubic-bezier(.22,1,.36,1);
       position: relative;
@@ -1186,11 +1186,11 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       position: absolute;
       top: 50%;
       transform: translate(-50%, -50%);
-      width: 10px;
-      height: 10px;
+      width: 9px;
+      height: 9px;
       border-radius: 50%;
       background: var(--live);
-      box-shadow: 0 0 8px 2px rgba(48,209,88,.45), 0 0 20px 4px rgba(48,209,88,.15);
+      box-shadow: 0 0 6px 2px rgba(48,209,88,.4), 0 0 16px 4px rgba(48,209,88,.12);
       z-index: 2;
       transition: left .8s cubic-bezier(.22,1,.36,1);
     }}
@@ -1201,19 +1201,19 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       margin-top: 6px;
     }}
     .progress-pct {{
-      font-size: 0.65rem;
+      font-size: 0.62rem;
       font-weight: 680;
       color: var(--live-text);
       font-variant-numeric: tabular-nums;
     }}
     .progress-remain {{
-      font-size: 0.65rem;
+      font-size: 0.62rem;
       font-weight: 480;
       color: var(--text-3);
       font-variant-numeric: tabular-nums;
     }}
     [data-theme="light"] .progress-glow {{
-      box-shadow: 0 0 6px 2px rgba(52,199,89,.35), 0 0 16px 4px rgba(52,199,89,.1);
+      box-shadow: 0 0 5px 2px rgba(52,199,89,.3), 0 0 12px 4px rgba(52,199,89,.08);
     }}
 
     .badge {{
@@ -1222,7 +1222,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       gap: 4px;
       padding: 3px 10px;
       border-radius: 999px;
-      font-size: 0.62rem;
+      font-size: 0.6rem;
       font-weight: 720;
       text-transform: uppercase;
       letter-spacing: 0.05em;
@@ -1234,7 +1234,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     }}
 
     .countdown {{
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       color: var(--accent);
       font-weight: 560;
       font-variant-numeric: tabular-nums;
@@ -1245,23 +1245,23 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      font-size: 0.73rem;
+      font-size: 0.7rem;
       color: var(--text-2);
-      margin-top: 10px;
+      margin-top: 8px;
       font-weight: 440;
     }}
     .loc svg {{
-      opacity: .4;
+      opacity: .35;
       flex-shrink: 0;
     }}
 
     /* Notes */
     details {{
-      margin-top: 12px;
+      margin-top: 10px;
     }}
     summary {{
       cursor: pointer;
-      font-size: 0.76rem;
+      font-size: 0.73rem;
       font-weight: 560;
       color: var(--accent);
       user-select: none;
@@ -1278,23 +1278,23 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       opacity: .75;
     }}
     details[open] summary {{
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }}
     .notes {{
       color: var(--text-2);
-      font-size: 0.76rem;
+      font-size: 0.73rem;
       line-height: 1.7;
-      padding: 12px 16px;
+      padding: 10px 14px;
       background: var(--surface-2);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 10px;
       font-weight: 400;
     }}
 
     /* ── Empty state ── */
     .empty-state {{
       text-align: center;
-      padding: 64px 32px;
+      padding: 56px 28px;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--r2);
@@ -1302,52 +1302,131 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     }}
     .empty-icon {{
       color: var(--text-3);
-      margin-bottom: 20px;
-      opacity: .45;
+      margin-bottom: 16px;
+      opacity: .4;
     }}
     .empty-state h2 {{
-      font-size: 1.15rem;
+      font-size: 1.1rem;
       font-weight: 680;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       letter-spacing: -0.01em;
     }}
     .empty-state p {{
       color: var(--text-2);
-      font-size: 0.88rem;
+      font-size: 0.85rem;
       font-weight: 400;
     }}
 
     /* ── Footer ── */
     footer {{
-      margin-top: 64px;
-      padding-top: 20px;
+      margin-top: 56px;
+      padding-top: 18px;
       border-top: 1px solid var(--border);
       color: var(--text-3);
-      font-size: 0.66rem;
+      font-size: 0.64rem;
       text-align: center;
       line-height: 1.7;
       letter-spacing: 0.03em;
       font-weight: 420;
     }}
 
-    /* ── Mobile ── */
-    @media (max-width: 600px) {{
-      .wrap {{ padding: 40px 18px 72px; }}
-      .hero h1 {{ font-size: 1.75rem; }}
-      .hero-top {{ align-items: flex-start; }}
+    /* ── Small mobile (≤480px) ── */
+    @media (max-width: 480px) {{
+      .wrap {{ padding: 28px 16px 64px; }}
+      .hero {{ margin-bottom: 36px; }}
+      .hero h1 {{ font-size: 1.5rem; letter-spacing: -0.04em; }}
+      .hero-top {{ gap: 12px; align-items: flex-start; }}
+      .clock {{ padding: 10px 14px; min-width: 96px; border-radius: 12px; }}
+      .clock-time {{ font-size: 1.2rem; }}
+      .clock-period {{ font-size: 0.42rem; margin-left: 2px; }}
+      .clock-divider {{ width: 20px; margin: 5px 0; }}
+      .clock-date {{ font-size: 0.54rem; }}
+      .hero-chips {{ margin-top: 14px; gap: 5px; }}
+      .chip {{ padding: 4px 10px; font-size: 0.6rem; }}
+      .hero-next {{ margin-top: 14px; gap: 8px; padding: 10px 12px; border-radius: 10px; flex-wrap: wrap; }}
+      .hero-next-label {{ font-size: 0.54rem; padding: 3px 8px; }}
+      .hero-next-title {{ font-size: 0.82rem; width: 100%; order: 3; white-space: normal; }}
+      .hero-eta {{ font-size: 0.7rem; }}
+      .hero-live {{ font-size: 0.58rem; padding: 3px 10px; }}
+      .day-group {{ margin-bottom: 28px; }}
+      .day-head {{ margin-bottom: 10px; gap: 8px; }}
+      .day-head h2 {{ font-size: 0.6rem; }}
+      .day-date {{ font-size: 0.6rem; }}
+      .cnt {{ font-size: 0.56rem; padding: 2px 8px; }}
+      .timeline {{ padding-left: 20px; }}
+      .tl-marker {{ left: -20px; top: 7px; }}
+      .tl-item::before {{ left: -14px; top: 14px; }}
+      .tl-item {{ padding-bottom: 10px; }}
+      .card {{ padding: 12px 14px 12px 16px; border-radius: 12px; }}
+      .card::before {{ top: 12px; bottom: 12px; }}
+      .card-top {{ margin-bottom: 4px; }}
+      .t {{ font-size: 0.68rem; }}
+      .dur {{ font-size: 0.58rem; padding: 2px 6px; }}
+      .card h3 {{ font-size: 0.88rem; margin-bottom: 2px; }}
+      .range {{ font-size: 0.65rem; }}
+      .countdown {{ font-size: 0.65rem; }}
+      .badge {{ font-size: 0.56rem; padding: 2px 8px; }}
+      .loc {{ font-size: 0.65rem; margin-top: 6px; }}
+      .progress-wrap {{ margin-top: 10px; }}
+      .progress-meta {{ margin-top: 4px; }}
+      .progress-pct, .progress-remain {{ font-size: 0.58rem; }}
+      details {{ margin-top: 8px; }}
+      summary {{ font-size: 0.68rem; }}
+      .notes {{ font-size: 0.68rem; padding: 8px 12px; border-radius: 8px; }}
+      .empty-state {{ padding: 40px 20px; }}
+      .empty-state h2 {{ font-size: 1rem; }}
+      .empty-state p {{ font-size: 0.8rem; }}
+      footer {{ margin-top: 40px; font-size: 0.6rem; }}
+    }}
+
+    /* ── Standard mobile (481px–700px) ── */
+    @media (min-width: 481px) and (max-width: 700px) {{
+      .wrap {{ padding: 40px 20px 80px; }}
+      .hero {{ margin-bottom: 40px; }}
+      .hero h1 {{ font-size: 1.8rem; }}
+      .hero-top {{ gap: 16px; align-items: flex-start; }}
       .clock {{ padding: 12px 16px; min-width: 110px; border-radius: 14px; }}
-      .clock-time {{ font-size: 1.4rem; }}
-      .clock-period {{ font-size: 0.48rem; margin-left: 3px; }}
+      .clock-time {{ font-size: 1.5rem; }}
+      .clock-period {{ font-size: 0.46rem; margin-left: 3px; }}
       .clock-divider {{ width: 24px; margin: 7px 0; }}
       .clock-date {{ font-size: 0.58rem; }}
       .hero-chips {{ margin-top: 18px; gap: 6px; }}
-      .chip {{ padding: 5px 11px; font-size: 0.65rem; }}
-      .timeline {{ padding-left: 22px; }}
-      .tl-marker {{ left: -22px; }}
-      .tl-item::before {{ left: -16px; }}
-      .card {{ padding: 14px 16px 14px 18px; border-radius: 14px; }}
-      .hero-next {{ flex-wrap: wrap; gap: 8px; padding: 12px 16px; border-radius: 12px; }}
-      .hero-next-title {{ width: 100%; order: 3; white-space: normal; }}
+      .chip {{ padding: 5px 12px; font-size: 0.64rem; }}
+      .hero-next {{ margin-top: 16px; padding: 12px 16px; border-radius: 12px; }}
+      .hero-next-title {{ font-size: 0.85rem; }}
+      .day-group {{ margin-bottom: 32px; }}
+      .day-head {{ margin-bottom: 12px; }}
+      .timeline {{ padding-left: 24px; }}
+      .tl-marker {{ left: -24px; }}
+      .tl-item::before {{ left: -18px; }}
+      .tl-item {{ padding-bottom: 12px; }}
+      .card {{ padding: 14px 18px 14px 18px; border-radius: 14px; }}
+      .card h3 {{ font-size: 0.92rem; }}
+      footer {{ margin-top: 48px; }}
+    }}
+
+    /* ── Large desktop (>900px) ── */
+    @media (min-width: 900px) {{
+      .wrap {{ max-width: 720px; padding: 80px 40px 120px; }}
+      .hero {{ margin-bottom: 56px; }}
+      .hero h1 {{ font-size: 2.8rem; }}
+      .hero-top {{ gap: 28px; }}
+      .clock {{ padding: 16px 24px; min-width: 140px; border-radius: 18px; }}
+      .clock-time {{ font-size: 1.85rem; }}
+      .clock-period {{ font-size: 0.52rem; margin-left: 4px; }}
+      .clock-divider {{ margin: 9px 0; width: 30px; }}
+      .hero-chips {{ margin-top: 24px; gap: 8px; }}
+      .chip {{ padding: 6px 14px; font-size: 0.7rem; }}
+      .hero-next {{ padding: 14px 20px; }}
+      .day-group {{ margin-bottom: 44px; }}
+      .day-head {{ margin-bottom: 16px; }}
+      .timeline {{ padding-left: 30px; }}
+      .tl-marker {{ left: -30px; }}
+      .tl-item::before {{ left: -22px; }}
+      .tl-item {{ padding-bottom: 16px; }}
+      .card {{ padding: 18px 22px 18px 22px; }}
+      .card h3 {{ font-size: 1rem; }}
+      footer {{ margin-top: 64px; }}
     }}
 
     /* ── Print ── */
@@ -1366,8 +1445,8 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       bottom: 24px;
       right: 24px;
       z-index: 100;
-      width: 48px;
-      height: 48px;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
       border: 1px solid var(--border-2);
       background: var(--surface);
@@ -1389,8 +1468,8 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       transform: scale(.95);
     }}
     .theme-toggle svg {{
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
       color: var(--text-2);
       transition: transform .5s cubic-bezier(.22,1,.36,1), opacity .3s ease;
     }}
@@ -1399,9 +1478,12 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     [data-theme="light"] .theme-toggle .icon-sun {{ opacity: 1; transform: rotate(0) scale(1); }}
     [data-theme="light"] .theme-toggle .icon-moon {{ opacity: 0; transform: rotate(90deg) scale(.5); }}
 
-    @media (max-width: 600px) {{
+    @media (max-width: 480px) {{
+      .theme-toggle {{ bottom: 14px; right: 14px; width: 38px; height: 38px; }}
+      .theme-toggle svg {{ width: 16px; height: 16px; }}
+    }}
+    @media (min-width: 481px) and (max-width: 700px) {{
       .theme-toggle {{ bottom: 18px; right: 18px; width: 42px; height: 42px; }}
-      .theme-toggle svg {{ width: 18px; height: 18px; }}
     }}
 
     /* ── Reduce motion ── */
