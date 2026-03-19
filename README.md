@@ -34,7 +34,7 @@ ICS feed (Outlook / Reclaim / Google)
 - **Auto-refresh** — page reloads every 5 minutes via `<meta http-equiv="refresh">`
 - **Responsive** — optimized for desktop, tablet, and mobile
 - **Glassmorphism** — frosted-glass cards with `backdrop-filter: blur()`
-- **GitHub mentions** — shows open issues/PRs where you're @mentioned, with repo, labels, and comment counts
+- **Action items** — surfaces your @mentions from a specific person's "Next Steps" comments on GitHub issues
 - **Accessible** — `prefers-reduced-motion` support, semantic HTML, print styles
 
 ## Repo structure
@@ -75,8 +75,9 @@ Outlook: **Calendar → Settings → Shared calendars → Publish a calendar** �
    | `AGENDA_TIMEZONE` | No | `America/Los_Angeles` |
    | `WINDOW_HOURS` | No | `48` |
    | `MAX_EVENTS` | No | `40` |
-   | `GITHUB_TOKEN` | No | — (enables GitHub mentions) |
+   | `GITHUB_TOKEN` | No | — (enables action items from GitHub) |
    | `GITHUB_USERNAME` | No | — (your GitHub handle) |
+   | `MENTOR_USERNAME` | No | `michelemt` (whose Next Steps to scan) |
    | `MAX_MENTIONS` | No | `15` |
 
 5. Deploy

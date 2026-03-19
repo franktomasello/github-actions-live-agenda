@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -32,13 +33,10 @@ class GitHubMention:
     repo: str
     number: int
     url: str
-    state: str
-    is_pr: bool
+    comment_url: str
     author: str
-    labels: list[str]
+    action_items: list[str]
     updated: datetime
-    created: datetime
-    comments: int
 
 
 def env(name: str, default: str | None = None, required: bool = False) -> str:
@@ -80,15 +78,13 @@ def fetch_ics(url: str) -> bytes:
         raise SystemExit(f"Failed to fetch ICS feed: {exc.reason}") from exc
 
 
-def fetch_github_mentions(token: str, username: str, tz: ZoneInfo) -> list[GitHubMention]:
-    """Fetch open issues/PRs where the user is @mentioned."""
-    if not token or not username:
-        return []
+MENTOR_USERNAME = env("MENTOR_USERNAME", "michelemt")
 
-    query = quote(f"mentions:{username} is:open is:issue sort:updated-desc")
-    api_url = f"https://api.github.com/search/issues?q={query}&per_page={MAX_MENTIONS}"
+
+def _github_get(url: str, token: str) -> dict | list | None:
+    """Make an authenticated GET request to the GitHub API."""
     req = Request(
-        api_url,
+        url,
         headers={
             "User-Agent": "github-actions-live-agenda/1.0",
             "Accept": "application/vnd.github+json",
@@ -99,34 +95,95 @@ def fetch_github_mentions(token: str, username: str, tz: ZoneInfo) -> list[GitHu
     )
     try:
         with urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read())
-    except (HTTPError, URLError) as exc:
-        print(f"Warning: GitHub API request failed: {exc}", file=sys.stderr)
+            return json.loads(resp.read())
+    except (HTTPError, URLError, Exception) as exc:
+        print(f"Warning: GitHub API request failed ({url}): {exc}", file=sys.stderr)
+        return None
+
+
+def _extract_action_items(body: str, username: str) -> list[str]:
+    """Extract action items mentioning @username from a 'Next Steps' section."""
+    lines = body.splitlines()
+    in_next_steps = False
+    items: list[str] = []
+    username_lower = username.lower()
+
+    for line in lines:
+        stripped = line.strip()
+        # Detect "Next Steps" heading (## Next Steps, **Next Steps**, or plain)
+        if re.match(r"^(#{1,4}\s+)?(\*\*)?next\s*steps(\*\*)?:?\s*$", stripped, re.IGNORECASE):
+            in_next_steps = True
+            continue
+
+        # Exit section on a new heading or bold heading
+        if in_next_steps and (re.match(r"^#{1,4}\s+", stripped) or re.match(r"^\*\*[^*]+\*\*\s*$", stripped)):
+            in_next_steps = False
+            continue
+
+        if not in_next_steps:
+            continue
+
+        # Match checkbox or bullet items: - [ ] text, - [x] text, - text, * text
+        item_match = re.match(r"^[-*]\s+(\[[ xX]\]\s+)?(.*)", stripped)
+        if item_match and f"@{username_lower}" in stripped.lower():
+            item_text = item_match.group(2).strip()
+            items.append(item_text)
+
+    return items
+
+
+def fetch_github_mentions(token: str, username: str, tz: ZoneInfo) -> list[GitHubMention]:
+    """Fetch open issues where MENTOR_USERNAME mentions @username in Next Steps."""
+    if not token or not username:
+        return []
+
+    # Search for open issues where the user is mentioned
+    query = quote(f"mentions:{username} is:open is:issue sort:updated-desc")
+    api_url = f"https://api.github.com/search/issues?q={query}&per_page={MAX_MENTIONS}"
+    data = _github_get(api_url, token)
+    if not data:
         return []
 
     mentions: list[GitHubMention] = []
     for item in data.get("items", []):
         repo_url = item.get("repository_url", "")
         repo = "/".join(repo_url.rsplit("/", 2)[-2:]) if repo_url else ""
-        is_pr = "pull_request" in item
-        updated = datetime.fromisoformat(item["updated_at"].replace("Z", "+00:00")).astimezone(tz)
-        created = datetime.fromisoformat(item["created_at"].replace("Z", "+00:00")).astimezone(tz)
+        issue_number = item.get("number", 0)
 
-        mentions.append(
-            GitHubMention(
-                title=item.get("title", "Untitled"),
-                repo=repo,
-                number=item.get("number", 0),
-                url=item.get("html_url", ""),
-                state=item.get("state", "open"),
-                is_pr=is_pr,
-                author=item.get("user", {}).get("login", ""),
-                labels=[l.get("name", "") for l in item.get("labels", [])],
-                updated=updated,
-                created=created,
-                comments=item.get("comments", 0),
+        # Fetch comments on this issue and look for mentor's Next Steps
+        comments_url = f"{repo_url}/issues/{issue_number}/comments?per_page=100"
+        comments = _github_get(comments_url, token)
+        if not comments or not isinstance(comments, list):
+            continue
+
+        # Search mentor's comments in reverse order (most recent first)
+        for comment in reversed(comments):
+            commenter = comment.get("user", {}).get("login", "")
+            if commenter.lower() != MENTOR_USERNAME.lower():
+                continue
+
+            body = comment.get("body", "")
+            action_items = _extract_action_items(body, username)
+            if not action_items:
+                continue
+
+            updated = datetime.fromisoformat(
+                comment["updated_at"].replace("Z", "+00:00")
+            ).astimezone(tz)
+
+            mentions.append(
+                GitHubMention(
+                    title=item.get("title", "Untitled"),
+                    repo=repo,
+                    number=issue_number,
+                    url=item.get("html_url", ""),
+                    comment_url=comment.get("html_url", ""),
+                    author=MENTOR_USERNAME,
+                    action_items=action_items,
+                    updated=updated,
+                )
             )
-        )
+            break  # Only take the most recent matching comment per issue
 
     return mentions
 
@@ -289,76 +346,53 @@ def render_github_section(mentions: list[GitHubMention], now: datetime, start_id
         delay = f' style="animation-delay:{idx * 40}ms"'
         idx += 1
 
-        type_icon = (
+        issue_icon = (
             '<svg class="gh-type-icon" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">'
-            '<path d="M7.177 3.073L9.573.677A.25.25 0 0110 .854v4.792a.25.25 0 01-.427.177L7.177 3.427a.25.25 0 010-.354zM3.75 '
-            '2.5a.75.75 0 100 1.5.75.75 0 000-1.5zm-2.25.75a2.25 2.25 0 113 2.122v5.256a2.251 2.251 0 11-1.5 0V5.372A2.25 '
-            '2.25 0 011.5 3.25zM11 2.5h-1V4h1a1 1 0 011 1v5.628a2.251 2.251 0 101.5 0V5A2.5 2.5 0 0011 2.5zm1 '
-            '10.25a.75.75 0 111.5 0 .75.75 0 01-1.5 0zM3.75 12a.75.75 0 100 1.5.75.75 0 000-1.5z"/></svg>'
-            if m.is_pr
-            else '<svg class="gh-type-icon" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">'
             '<path d="M8 9.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>'
             '<path d="M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0z"/></svg>'
         )
-        type_label = "PR" if m.is_pr else "Issue"
 
-        label_html = ""
-        if m.labels:
-            label_chips = "".join(
-                f'<span class="gh-label">{_esc(l)}</span>' for l in m.labels[:3]
-            )
-            label_html = f'<div class="gh-labels">{label_chips}</div>'
-
-        comments_html = ""
-        if m.comments > 0:
-            comments_html = (
-                f'<span class="gh-comments">'
-                f'<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">'
-                f'<path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0113.25 12H9.06l-2.573 '
-                f'2.573A1.458 1.458 0 014 13.543V12H2.75A1.75 1.75 0 011 10.25v-7.5z"/></svg>'
-                f'{m.comments}</span>'
-            )
+        # Render action items as a checklist
+        items_html = "".join(
+            f'<li class="gh-action-item">'
+            f'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l2 2"/></svg>'
+            f'<span>{_esc(item)}</span>'
+            f'</li>'
+            for item in m.action_items
+        )
 
         updated_ago = _time_ago(m.updated, now)
 
         cards.append(
             f'<div class="tl-item{last_class} fade-in"{delay}>'
             f'<div class="tl-marker"><span class="dot gh-dot"></span></div>'
-            f'<a href="{_esc(m.url)}" target="_blank" rel="noopener" class="card gh-card" style="--accent-bar:#8b5cf6">'
+            f'<a href="{_esc(m.comment_url or m.url)}" target="_blank" rel="noopener" class="card gh-card" style="--accent-bar:#8b5cf6">'
             f'<div class="card-top">'
             f'<div class="gh-meta">'
-            f'{type_icon}'
+            f'{issue_icon}'
             f'<span class="gh-repo">{_esc(m.repo)}</span>'
             f'<span class="gh-number">#{m.number}</span>'
             f'</div>'
             f'<div class="card-meta-right">'
-            f'<span class="gh-type-badge gh-type-{type_label.lower()}">{type_label}</span>'
-            f'{comments_html}'
+            f'<span class="gh-updated">{updated_ago}</span>'
             f'</div>'
             f'</div>'
             f'<h3>{_esc(m.title)}</h3>'
+            f'<ul class="gh-action-list">{items_html}</ul>'
             f'<div class="gh-footer">'
-            f'<span class="gh-author">@{_esc(m.author)}</span>'
-            f'<span class="gh-updated">updated {updated_ago}</span>'
+            f'<span class="gh-author">from @{_esc(m.author)}</span>'
             f'</div>'
-            f'{label_html}'
             f'</a>'
             f'</div>'
         )
 
+    total_items = sum(len(m.action_items) for m in mentions)
     section = (
         f'<section class="day-group gh-section">'
         f'<div class="day-head gh-head">'
-        f'<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="opacity:.6">'
-        f'<path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 01-5.45 7.59c-.4.08-.55-.17-.55-.38 '
-        f'0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 '
-        f'0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 '
-        f'0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 '
-        f'1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.58.93.65 '
-        f'1.16.13.42.55 1.2 1.07 1.21 0 .83.01 1.2.01 1.2 0 .21-.15.46-.55.38A8.013 8.013 0 010 8c0-4.42 3.58-8 8-8z"/>'
-        f'</svg>'
-        f'<h2>Mentions</h2>'
-        f'<span class="cnt">{len(mentions)}</span>'
+        f'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.6"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
+        f'<h2>Action Items</h2>'
+        f'<span class="cnt">{total_items}</span>'
         f'</div>'
         f'<div class="timeline">{"".join(cards)}</div>'
         f'</section>'
@@ -990,50 +1024,37 @@ def render(events: Iterable[Event], tz: ZoneInfo, mentions: list[GitHubMention] 
       font-weight: 480;
       flex-shrink: 0;
     }}
-    .gh-type-badge {{
-      font-size: 0.6rem;
-      font-weight: 680;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      padding: 3px 8px;
-      border-radius: 6px;
-      flex-shrink: 0;
-    }}
-    .gh-type-pr {{
-      background: rgba(139,92,246,.1);
-      color: #a78bfa;
-    }}
-    .gh-type-issue {{
-      background: rgba(34,197,94,.1);
-      color: #4ade80;
-    }}
-    [data-theme="light"] .gh-type-pr {{
-      background: rgba(139,92,246,.08);
-      color: #7c3aed;
-    }}
-    [data-theme="light"] .gh-type-issue {{
-      background: rgba(34,197,94,.08);
-      color: #16a34a;
-    }}
-    .gh-comments {{
-      display: inline-flex;
-      align-items: center;
-      gap: 3px;
-      font-size: 0.68rem;
-      color: var(--text-3);
-      font-weight: 500;
-    }}
-    .gh-comments svg {{
-      opacity: .5;
-    }}
     .gh-card h3 {{
       margin-top: 2px;
+    }}
+    .gh-action-list {{
+      list-style: none;
+      margin: 10px 0 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }}
+    .gh-action-item {{
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 0.82rem;
+      color: var(--text-1);
+      line-height: 1.45;
+    }}
+    .gh-action-item svg {{
+      color: #8b5cf6;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }}
+    [data-theme="light"] .gh-action-item svg {{
+      color: #7c3aed;
     }}
     .gh-footer {{
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-top: 4px;
+      margin-top: 6px;
     }}
     .gh-author {{
       font-size: 0.72rem;
@@ -1044,22 +1065,6 @@ def render(events: Iterable[Event], tz: ZoneInfo, mentions: list[GitHubMention] 
       font-size: 0.68rem;
       color: var(--text-3);
       font-weight: 420;
-    }}
-    .gh-labels {{
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      margin-top: 8px;
-    }}
-    .gh-label {{
-      font-size: 0.62rem;
-      font-weight: 580;
-      padding: 2px 8px;
-      border-radius: 999px;
-      background: var(--surface-2);
-      color: var(--text-2);
-      border: 1px solid var(--border);
-      letter-spacing: 0.01em;
     }}
 
     /* ── Empty state ── */
