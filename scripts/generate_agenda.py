@@ -22,7 +22,7 @@ _RENDER_JS = r"""
   var TZ           = window.__AGENDA_TZ__;
   var WINDOW_HOURS = window.__AGENDA_WINDOW_HOURS__;
   var POLL_MS      = 30000;
-  var TICK_MS      = 15000;
+  var TICK_MS      = 10000;
 
   var currentSig   = null;
   var currentData  = null;
@@ -200,38 +200,9 @@ _RENDER_JS = r"""
     }
   }
 
-  // ── Lightweight tick — only update countdowns + badges, skip full re-render ─
+  // ── Tick — full re-render so state transitions (e.g. "in 1 min" → "Now") work ─
   function tick() {
-    if (!currentData) return;
-    var now = new Date();
-
-    // Update hero next-up ETA
-    var heroWrap = document.getElementById('hero-next-wrap');
-    if (heroWrap && currentData.length > 0) {
-      var next = currentData.filter(function (e) { return new Date(e.end) >= now; })[0];
-      if (next) {
-        var rel = timeUntil(next.start, next.end, next.isAllDay, now);
-        var isNow = rel === 'Now' || rel === 'In progress';
-        var eta = heroWrap.querySelector('.hero-eta, .hero-live');
-        if (eta) eta.textContent = rel;
-        var label = heroWrap.querySelector('.hero-next-label');
-        if (label) label.textContent = isNow ? 'Live' : 'Next';
-      }
-    }
-
-    // Update countdown spans and badges in-place
-    var items = document.querySelectorAll('.tl-item');
-    var dataIdx = 0;
-    var live = currentData.filter(function (e) { return new Date(e.end) >= now; });
-    for (var i = 0; i < items.length && dataIdx < live.length; i++) {
-      var ev = live[dataIdx++];
-      var rel = timeUntil(ev.start, ev.end, ev.isAllDay, now);
-      var cd = items[i].querySelector('.countdown');
-      if (cd) cd.textContent = rel;
-      var badge = items[i].querySelector('.badge.live');
-      if (badge) badge.textContent = rel;
-    }
-
+    if (currentData) renderAll(currentData);
   }
 
   // ── Data fetching & polling ─────────────────────────────────────────────────
