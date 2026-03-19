@@ -93,6 +93,10 @@ _RENDER_JS = r"""
     if (diffMin < -5)  return 'In progress';
     if (diffSec <= 0)  return 'Now';
     if (diffSec < 60)  return 'in ' + diffSec + 's';
+    if (diffMin < 5) {
+      var rs = diffSec % 60;
+      return 'in ' + diffMin + 'm ' + (rs < 10 ? '0' : '') + rs + 's';
+    }
     if (diffMin < 60)  return 'in ' + diffMin + ' min';
     var h = Math.floor(diffMin / 60), r = diffMin % 60;
     return r ? 'in ' + h + 'h ' + r + 'm' : 'in ' + h + 'h';
@@ -302,10 +306,10 @@ _RENDER_JS = r"""
       var rel = timeUntil(start, end, allDay, now);
       var wasNow = item.classList.contains('is-now');
       var isNow = rel === 'Now' || rel === 'In progress';
-      var justEnded = new Date(end) < now && wasNow;
+      var hasEnded = new Date(end) < now;
 
-      // State transition (upcoming→now, now→ended) — rebuild once
-      if (isNow !== wasNow || justEnded) { needsFullRender = true; break; }
+      // State transition or event ended — rebuild to remove/restyle
+      if (isNow !== wasNow || hasEnded) { needsFullRender = true; break; }
 
       // Update countdown text
       var countdown = item.querySelector('.countdown');
