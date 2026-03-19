@@ -783,58 +783,48 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     .wrap {{
       max-width: 640px;
       margin: 0 auto;
-      padding: 56px 24px 100px;
+      padding: 64px 28px 100px;
     }}
 
     /* ── Header ── */
     .hero {{
-      margin-bottom: 44px;
+      margin-bottom: 48px;
     }}
     .hero h1 {{
-      font-size: clamp(2rem, 5vw, 2.8rem);
+      font-size: clamp(2.1rem, 5.2vw, 3rem);
       font-weight: 800;
-      letter-spacing: -0.045em;
-      line-height: 1.08;
-      background: linear-gradient(135deg, #f5f5f7 0%, #a1a1a6 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }}
-    [data-theme="light"] .hero h1 {{
-      background: linear-gradient(135deg, #1c1c1e 0%, #636366 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      letter-spacing: -0.05em;
+      line-height: 1.05;
+      color: var(--text);
     }}
     .hero-top {{
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       justify-content: space-between;
-      gap: 16px;
+      gap: 20px;
     }}
     @keyframes clock-separator-blink {{
       0%, 100% {{ opacity: 1; }}
-      50% {{ opacity: 0.3; }}
+      50% {{ opacity: 0.2; }}
     }}
     .clock {{
       display: flex;
       flex-direction: column;
       align-items: center;
       flex-shrink: 0;
-      padding: 14px 20px;
+      padding: 16px 22px;
       background: var(--surface);
       border: 1px solid var(--border-2);
-      border-radius: 16px;
-      box-shadow: var(--card-shadow);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      min-width: 130px;
-      gap: 0;
+      border-radius: 18px;
+      box-shadow: var(--card-shadow), 0 0 0 1px var(--border);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      min-width: 136px;
     }}
     .clock-time {{
-      font-size: 1.8rem;
+      font-size: 1.9rem;
       font-weight: 760;
-      letter-spacing: -0.035em;
+      letter-spacing: -0.04em;
       line-height: 1;
       color: var(--text);
       font-variant-numeric: tabular-nums;
@@ -845,25 +835,24 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       display: inline;
     }}
     .clock-divider {{
-      width: 36px;
+      width: 32px;
       height: 1px;
-      background: var(--border-2);
-      margin: 8px 0;
-      border-radius: 1px;
+      background: linear-gradient(90deg, transparent, var(--border-2), transparent);
+      margin: 9px 0;
     }}
     .clock-date {{
-      font-size: 0.68rem;
-      font-weight: 500;
+      font-size: 0.65rem;
+      font-weight: 520;
       color: var(--text-3);
-      letter-spacing: 0.03em;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
     }}
 
     .hero-chips {{
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 20px;
+      gap: 8px;
+      margin-top: 24px;
     }}
     .chip {{
       display: inline-flex;
@@ -871,13 +860,12 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       gap: 4px;
       background: var(--accent-bg);
       color: var(--accent);
-      padding: 5px 12px;
+      padding: 6px 14px;
       border-radius: 999px;
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       font-weight: 560;
-      letter-spacing: 0.015em;
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
+      letter-spacing: 0.02em;
+      border: 1px solid rgba(10,132,255,.08);
     }}
 
     /* ── Hero next-up ── */
@@ -885,18 +873,18 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       display: flex;
       align-items: center;
       gap: 14px;
-      margin-top: 28px;
-      padding: 16px 20px;
+      margin-top: 24px;
+      padding: 14px 20px;
       background: var(--surface);
       border: 1px solid var(--border-2);
-      border-radius: var(--r);
+      border-radius: 14px;
       box-shadow: var(--card-shadow);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
     }}
     .hero-next-label {{
-      font-size: 0.62rem;
-      font-weight: 720;
+      font-size: 0.6rem;
+      font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.1em;
       color: var(--accent);
@@ -908,7 +896,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     .hero-next-title {{
       flex: 1;
       font-weight: 620;
-      font-size: 0.92rem;
+      font-size: 0.9rem;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -916,25 +904,26 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     }}
     .hero-eta {{
       color: var(--text-2);
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       font-weight: 500;
       flex-shrink: 0;
+      font-variant-numeric: tabular-nums;
     }}
     .hero-live {{
       color: var(--live-text);
-      font-size: 0.7rem;
+      font-size: 0.65rem;
       font-weight: 720;
       text-transform: uppercase;
       letter-spacing: 0.06em;
       flex-shrink: 0;
-      padding: 3px 10px;
+      padding: 4px 12px;
       background: var(--live-bg);
       border-radius: 999px;
     }}
 
     /* ── Day groups ── */
     .day-group {{
-      margin-bottom: 40px;
+      margin-bottom: 36px;
       content-visibility: auto;
       contain-intrinsic-size: auto 400px;
     }}
@@ -945,27 +934,27 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-bottom: 18px;
+      margin-bottom: 16px;
       padding-left: 2px;
     }}
     .day-head h2 {{
-      font-size: 0.72rem;
+      font-size: 0.68rem;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.06em;
       color: var(--text-2);
     }}
     .day-head.is-today h2 {{
       color: var(--accent);
     }}
     .day-date {{
-      font-size: 0.72rem;
+      font-size: 0.68rem;
       color: var(--text-3);
       font-weight: 420;
     }}
     .cnt {{
       margin-left: auto;
-      font-size: 0.65rem;
+      font-size: 0.62rem;
       font-weight: 620;
       color: var(--text-3);
       background: var(--surface-2);
@@ -977,12 +966,12 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     /* ── Timeline ── */
     .timeline {{
       position: relative;
-      padding-left: 24px;
+      padding-left: 26px;
     }}
 
     .tl-item {{
       position: relative;
-      padding-bottom: 10px;
+      padding-bottom: 12px;
     }}
     .tl-item:last-child {{
       padding-bottom: 0;
@@ -992,9 +981,9 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     .tl-item::before {{
       content: '';
       position: absolute;
-      left: -17px;
-      top: 12px;
-      bottom: -2px;
+      left: -19px;
+      top: 14px;
+      bottom: 0;
       width: 1.5px;
       background: var(--tl-line);
       border-radius: 1px;
@@ -1006,7 +995,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     /* Marker */
     .tl-marker {{
       position: absolute;
-      left: -24px;
+      left: -26px;
       top: 6px;
       width: 14px;
       height: 14px;
@@ -1041,7 +1030,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--r);
-      padding: 18px 20px 18px 24px;
+      padding: 16px 20px 16px 22px;
       box-shadow: var(--card-shadow);
       transition: box-shadow .25s cubic-bezier(.22,1,.36,1), border-color .25s ease, transform .25s cubic-bezier(.22,1,.36,1);
       overflow: hidden;
@@ -1054,12 +1043,12 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       content: '';
       position: absolute;
       left: 0;
-      top: 12px;
-      bottom: 12px;
+      top: 14px;
+      bottom: 14px;
       width: 3px;
       border-radius: 0 3px 3px 0;
       background: var(--accent-bar, var(--accent));
-      opacity: .65;
+      opacity: .55;
       transition: opacity .2s ease;
     }}
     .card:hover {{
@@ -1083,7 +1072,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
     }}
     .card-time {{
       display: flex;
@@ -1091,16 +1080,17 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       gap: 8px;
     }}
     .t {{
-      font-size: 0.78rem;
+      font-size: 0.75rem;
       font-weight: 600;
       color: var(--text-2);
       letter-spacing: 0.01em;
+      font-variant-numeric: tabular-nums;
     }}
     .dur {{
-      font-size: 0.68rem;
+      font-size: 0.65rem;
       color: var(--text-3);
       font-weight: 480;
-      padding: 1px 7px;
+      padding: 2px 8px;
       background: var(--surface-2);
       border-radius: 6px;
     }}
@@ -1111,23 +1101,24 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     }}
 
     .card h3 {{
-      font-size: 1.02rem;
-      font-weight: 640;
+      font-size: 1rem;
+      font-weight: 650;
       line-height: 1.35;
-      letter-spacing: -0.015em;
-      margin-bottom: 3px;
+      letter-spacing: -0.018em;
+      margin-bottom: 4px;
     }}
     .range {{
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       color: var(--text-3);
-      margin-bottom: 2px;
+      margin-bottom: 0;
       font-weight: 420;
+      font-variant-numeric: tabular-nums;
     }}
 
     /* ── Progress bar ── */
     .progress-wrap {{
-      margin-top: 12px;
-      margin-bottom: 4px;
+      margin-top: 14px;
+      margin-bottom: 2px;
     }}
     .progress-track {{
       position: relative;
@@ -1207,9 +1198,9 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      font-size: 0.76rem;
+      font-size: 0.73rem;
       color: var(--text-2);
-      margin-top: 6px;
+      margin-top: 10px;
       font-weight: 440;
     }}
     .loc svg {{
@@ -1281,30 +1272,33 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
 
     /* ── Footer ── */
     footer {{
-      margin-top: 56px;
-      padding-top: 24px;
+      margin-top: 64px;
+      padding-top: 20px;
       border-top: 1px solid var(--border);
       color: var(--text-3);
-      font-size: 0.7rem;
+      font-size: 0.66rem;
       text-align: center;
       line-height: 1.7;
-      letter-spacing: 0.02em;
+      letter-spacing: 0.03em;
       font-weight: 420;
     }}
 
     /* ── Mobile ── */
     @media (max-width: 600px) {{
-      .wrap {{ padding: 32px 18px 72px; }}
-      .hero h1 {{ font-size: 1.8rem; }}
-      .clock {{ padding: 10px 14px; min-width: 105px; border-radius: 12px; }}
-      .clock-time {{ font-size: 1.35rem; }}
-      .clock-divider {{ width: 28px; margin: 6px 0; }}
-      .clock-date {{ font-size: 0.6rem; }}
-      .timeline {{ padding-left: 20px; }}
-      .tl-marker {{ left: -20px; }}
-      .tl-item::before {{ left: -14px; }}
-      .card {{ padding: 15px 16px 15px 20px; border-radius: 14px; }}
-      .hero-next {{ flex-wrap: wrap; gap: 8px; padding: 14px 16px; }}
+      .wrap {{ padding: 40px 18px 72px; }}
+      .hero h1 {{ font-size: 1.75rem; }}
+      .hero-top {{ align-items: flex-start; }}
+      .clock {{ padding: 12px 16px; min-width: 110px; border-radius: 14px; }}
+      .clock-time {{ font-size: 1.4rem; }}
+      .clock-divider {{ width: 24px; margin: 7px 0; }}
+      .clock-date {{ font-size: 0.58rem; }}
+      .hero-chips {{ margin-top: 18px; gap: 6px; }}
+      .chip {{ padding: 5px 11px; font-size: 0.65rem; }}
+      .timeline {{ padding-left: 22px; }}
+      .tl-marker {{ left: -22px; }}
+      .tl-item::before {{ left: -16px; }}
+      .card {{ padding: 14px 16px 14px 18px; border-radius: 14px; }}
+      .hero-next {{ flex-wrap: wrap; gap: 8px; padding: 12px 16px; border-radius: 12px; }}
       .hero-next-title {{ width: 100%; order: 3; white-space: normal; }}
     }}
 
