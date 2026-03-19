@@ -304,7 +304,6 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="refresh" content="300">
   <title>{_esc(TITLE)}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -880,7 +879,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     </div>
     {''.join(sections)}
     <footer>
-      Auto-refreshes every 5&nbsp;min &middot; Rebuilt on push via Cloudflare&nbsp;Pages
+      Rebuilt on push via Cloudflare&nbsp;Pages
     </footer>
   </main>
   <button class="theme-toggle" aria-label="Toggle light/dark mode" title="Toggle theme">
