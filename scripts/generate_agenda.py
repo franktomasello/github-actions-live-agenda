@@ -305,11 +305,16 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="refresh" content="120">
+  <meta name="theme-color" content="#000000" id="tc">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>">
   <title>{_esc(TITLE)}</title>
+  <script>
+  (function(){{var s=localStorage.getItem('agenda-theme');if(s==='light'){{document.documentElement.setAttribute('data-theme','light');document.getElementById('tc').content='#f2f2f7';}}}})();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" as="style">
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
-  <style>@font-face {{ font-family: 'Inter'; font-display: swap; }}</style>
   <style>
     /* ── Reset ── */
     *,*::before,*::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
@@ -587,6 +592,12 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       animation: pulse-glow 2.5s cubic-bezier(.4,0,.6,1) infinite;
     }}
 
+    /* ── Day groups — off-screen perf ── */
+    .day-group {{
+      content-visibility: auto;
+      contain-intrinsic-size: auto 400px;
+    }}
+
     /* ── Cards ── */
     .card {{
       position: relative;
@@ -599,6 +610,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       overflow: hidden;
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
+      contain: layout style paint;
     }}
     /* Left accent bar */
     .card::before {{
@@ -888,15 +900,12 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
   </button>
   <script>
   (function(){{
-    var KEY='agenda-theme';
-    var root=document.documentElement;
-    var saved=localStorage.getItem(KEY);
-    if(saved==='light')root.setAttribute('data-theme','light');
+    var KEY='agenda-theme',tc=document.getElementById('tc'),root=document.documentElement;
     var btn=document.querySelector('.theme-toggle');
     btn.addEventListener('click',function(){{
       var isLight=root.getAttribute('data-theme')==='light';
-      if(isLight){{root.removeAttribute('data-theme');localStorage.setItem(KEY,'dark');}}
-      else{{root.setAttribute('data-theme','light');localStorage.setItem(KEY,'light');}}
+      if(isLight){{root.removeAttribute('data-theme');localStorage.setItem(KEY,'dark');tc.content='#000000';}}
+      else{{root.setAttribute('data-theme','light');localStorage.setItem(KEY,'light');tc.content='#f2f2f7';}}
     }});
   }})();
   </script>
@@ -917,7 +926,7 @@ def write_json(events: Iterable[Event]) -> None:
         }
         for e in events
     ]
-    (SITE_DIR / "agenda.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    (SITE_DIR / "agenda.json").write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
 
 
 if __name__ == "__main__":
@@ -927,4 +936,15 @@ if __name__ == "__main__":
     html_doc = render(events, tz)
     (SITE_DIR / "index.html").write_text(html_doc, encoding="utf-8")
     write_json(events)
+    (SITE_DIR / "_headers").write_text(
+        "/index.html\n"
+        "  Cache-Control: public, max-age=60, s-maxage=120, stale-while-revalidate=300\n"
+        "  X-Content-Type-Options: nosniff\n"
+        "  X-Frame-Options: DENY\n"
+        "  Referrer-Policy: strict-origin-when-cross-origin\n"
+        "\n"
+        "/agenda.json\n"
+        "  Cache-Control: public, max-age=60, s-maxage=120\n",
+        encoding="utf-8",
+    )
     print(f"Wrote {len(events)} event(s) to {SITE_DIR / 'index.html'}")
