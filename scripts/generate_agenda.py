@@ -879,7 +879,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     </div>
     {''.join(sections)}
     <footer>
-      Rebuilt on push via Cloudflare&nbsp;Pages
+      Rebuilt every&nbsp;5&nbsp;min &middot; Updates detected automatically
     </footer>
   </main>
   <button class="theme-toggle" aria-label="Toggle light/dark mode" title="Toggle theme">
@@ -898,6 +898,26 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       if(isLight){{root.removeAttribute('data-theme');localStorage.setItem(KEY,'dark');}}
       else{{root.setAttribute('data-theme','light');localStorage.setItem(KEY,'light');}}
     }});
+  }})();
+
+  // Poll /agenda.json every 60 s; reload only when data actually changes.
+  (function(){{
+    var POLL_MS = 60000;
+    var baseline = null;
+    function check(){{
+      fetch('/agenda.json?_=' + Date.now())
+        .then(function(r){{ return r.text(); }})
+        .then(function(text){{
+          try {{
+            var sig = JSON.stringify(JSON.parse(text));
+            if(baseline === null){{ baseline = sig; }}
+            else if(sig !== baseline){{ location.reload(); }}
+          }} catch(e){{}}
+        }})
+        .catch(function(){{}});
+    }}
+    // Establish baseline after page settles, then poll every minute.
+    setTimeout(function(){{ check(); setInterval(check, POLL_MS); }}, 10000);
   }})();
   </script>
 </body>

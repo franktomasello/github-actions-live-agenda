@@ -1,0 +1,16 @@
+name: Scheduled Rebuild
+
+on:
+  schedule:
+    # Every 5 minutes — GitHub Actions minimum interval.
+    # Triggers a Cloudflare Pages rebuild so the agenda stays current.
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # allow manual trigger
+
+jobs:
+  trigger-rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Cloudflare Pages deploy hook
+        run: |
+          curl --fail -X POST "${{ secrets.CF_PAGES_DEPLOY_HOOK_URL }}"
