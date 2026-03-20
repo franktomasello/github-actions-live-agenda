@@ -206,11 +206,24 @@ _RENDER_JS = r"""
     var dateSub = (!isToday && heading !== 'Tomorrow' && evts.length > 0)
       ? '<span class="day-date">' + esc(_fmtLongDate.format(new Date(evts[0].start))) + '</span>'
       : '';
+    var tomorrowBlurb = '';
+    if (heading === 'Tomorrow' && evts.length > 0 && !evts[0].isAllDay) {
+      tomorrowBlurb = '<div class="tomorrow-starts">Your day starts at <strong>' + fmtTime(evts[0].start) + '</strong></div>';
+    } else if (heading === 'Tomorrow' && evts.length > 0 && evts[0].isAllDay) {
+      // Find first non-all-day event
+      for (var ti = 0; ti < evts.length; ti++) {
+        if (!evts[ti].isAllDay) {
+          tomorrowBlurb = '<div class="tomorrow-starts">Your day starts at <strong>' + fmtTime(evts[ti].start) + '</strong></div>';
+          break;
+        }
+      }
+    }
     return {
       html: '<section class="day-group">'
         + '<div class="day-head' + (isToday ? ' is-today' : '') + '">'
         + '<h2>' + esc(heading) + '</h2>' + dateSub
         + '<span class="cnt">' + evts.length + '</span></div>'
+        + tomorrowBlurb
         + '<div class="timeline">' + cards + '</div></section>',
       idx: idx,
     };
@@ -824,6 +837,16 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
             if not is_today and heading != "Tomorrow" and count > 0:
                 date_sub = f'<span class="day-date">{_fmt(group[0].start, "%B %-d, %Y", "%B %#d, %Y")}</span>'
 
+            tomorrow_blurb = ""
+            if heading == "Tomorrow" and count > 0:
+                first_timed = next((e for e in group if not e.is_all_day), None)
+                if first_timed:
+                    tomorrow_blurb = (
+                        f'<div class="tomorrow-starts">'
+                        f"Your day starts at <strong>{_fmt_clock(first_timed.start)}</strong>"
+                        f"</div>"
+                    )
+
             sections.append(
                 f'<section class="day-group">'
                 f'<div class="day-head{"" if not is_today else " is-today"}">'
@@ -831,6 +854,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
                 f"{date_sub}"
                 f'<span class="cnt">{count}</span>'
                 f"</div>"
+                f"{tomorrow_blurb}"
                 f'<div class="timeline">{"".join(cards)}</div>'
                 f"</section>"
             )
@@ -1149,6 +1173,21 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       padding: 3px 10px;
       border-radius: 999px;
       border: 1px solid var(--border);
+    }}
+    .tomorrow-starts {{
+      font-size: 0.72rem;
+      font-weight: 450;
+      color: var(--text-2);
+      padding: 8px 14px;
+      margin-bottom: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border-2);
+      border-radius: 10px;
+      letter-spacing: 0.01em;
+    }}
+    .tomorrow-starts strong {{
+      font-weight: 700;
+      color: var(--text);
     }}
 
     /* ── Timeline ── */
