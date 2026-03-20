@@ -527,6 +527,54 @@ _RENDER_JS = r"""
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden) fetchAndUpdate();
   });
+
+  // ── TGIF Friday Banner ──────────────────────────────────────────────────────
+  (function initTGIF() {
+    var fmt = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'long' });
+    var dayName = fmt.format(new Date());
+    if (dayName !== 'Friday') return;
+
+    var banner = document.getElementById('tgif-banner');
+    var textEl = document.getElementById('tgif-text');
+    var confettiEl = document.getElementById('tgif-confetti');
+    if (!banner || !textEl) return;
+
+    // Animate each letter with staggered wave
+    var phrase = 'THANK GOD IT\'S FRIDAY!';
+    var html = '';
+    for (var i = 0; i < phrase.length; i++) {
+      if (phrase[i] === ' ') {
+        html += '<span style="width:6px;display:inline-block"></span>';
+      } else {
+        var delay = (i * 0.08);
+        html += '<span class="tgif-letter" style="animation-delay:' + delay + 's,' + delay + 's">' + phrase[i] + '</span>';
+      }
+    }
+    textEl.innerHTML = html;
+
+    // Confetti particles
+    if (confettiEl) {
+      var colors = ['#ff9f0a','#ff375f','#af52de','#5e5ce6','#007aff','#30d158','#ffd60a'];
+      for (var c = 0; c < 30; c++) {
+        var p = document.createElement('span');
+        p.className = 'tgif-particle';
+        var left = Math.random() * 100;
+        var dur = 2 + Math.random() * 3;
+        var del = Math.random() * 4;
+        var size = 4 + Math.random() * 4;
+        var color = colors[Math.floor(Math.random() * colors.length)];
+        var rot = Math.random() * 360;
+        p.style.cssText = 'left:' + left + '%;width:' + size + 'px;height:' + size
+          + 'px;background:' + color + ';animation-duration:' + dur
+          + 's;animation-delay:' + del + 's;transform:rotate(' + rot + 'deg);border-radius:'
+          + (Math.random() > 0.5 ? '50%' : '1px');
+        confettiEl.appendChild(p);
+      }
+    }
+
+    banner.style.display = 'block';
+    banner.setAttribute('aria-hidden', 'false');
+  })();
 })();
 """
 
@@ -1741,6 +1789,91 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .progress-fill, .progress-glow {{ transition: none; }}
       .progress-glow {{ box-shadow: none; }}
       .clock-time .clock-sep {{ animation: none; opacity: 1; }}
+      .tgif-banner {{ animation: none !important; }}
+      .tgif-banner .tgif-letter {{ animation: none !important; }}
+      .tgif-confetti {{ display: none !important; }}
+    }}
+
+    /* ── TGIF Friday Banner ── */
+    .tgif-banner {{
+      display: none;
+      text-align: center;
+      margin: -8px 0 28px;
+      padding: 18px 20px 14px;
+      border-radius: 16px;
+      background: linear-gradient(135deg,
+        rgba(255,159,10,0.12) 0%,
+        rgba(94,92,230,0.12) 50%,
+        rgba(175,82,222,0.12) 100%);
+      border: 1px solid rgba(255,159,10,0.2);
+      position: relative;
+      overflow: hidden;
+      animation: tgif-glow 3s ease-in-out infinite;
+    }}
+    [data-theme="light"] .tgif-banner {{
+      background: linear-gradient(135deg,
+        rgba(255,159,10,0.08) 0%,
+        rgba(94,92,230,0.08) 50%,
+        rgba(175,82,222,0.08) 100%);
+      border-color: rgba(255,159,10,0.15);
+    }}
+    @keyframes tgif-glow {{
+      0%, 100% {{ border-color: rgba(255,159,10,0.2); }}
+      33% {{ border-color: rgba(94,92,230,0.3); }}
+      66% {{ border-color: rgba(175,82,222,0.3); }}
+    }}
+    .tgif-text {{
+      display: inline-flex;
+      gap: 1px;
+      font-size: clamp(1.2rem, 3.5vw, 1.6rem);
+      font-weight: 800;
+      letter-spacing: 0.04em;
+    }}
+    .tgif-letter {{
+      display: inline-block;
+      animation: tgif-wave 2.5s ease-in-out infinite;
+      background: linear-gradient(135deg, #ff9f0a, #ff375f, #af52de, #5e5ce6, #007aff);
+      background-size: 200% 200%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: tgif-wave 2.5s ease-in-out infinite, tgif-gradient 4s ease infinite;
+    }}
+    @keyframes tgif-wave {{
+      0%, 100% {{ transform: translateY(0); }}
+      50% {{ transform: translateY(-4px); }}
+    }}
+    @keyframes tgif-gradient {{
+      0%, 100% {{ background-position: 0% 50%; }}
+      50% {{ background-position: 100% 50%; }}
+    }}
+    .tgif-sub {{
+      display: block;
+      margin-top: 4px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      opacity: 0.5;
+    }}
+    .tgif-confetti {{
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }}
+    .tgif-particle {{
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      border-radius: 1px;
+      opacity: 0;
+      animation: tgif-fall linear infinite;
+    }}
+    @keyframes tgif-fall {{
+      0% {{ transform: translateY(-10px) rotate(0deg); opacity: 0; }}
+      10% {{ opacity: 0.7; }}
+      90% {{ opacity: 0.7; }}
+      100% {{ transform: translateY(80px) rotate(720deg); opacity: 0; }}
     }}
   </style>
 </head>
@@ -1759,6 +1892,11 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
         <span class="chip">{total_events} event{"s" if total_events != 1 else ""}</span>
       </div>
       <div id="hero-next-wrap">{hero_next}</div>
+    </div>
+    <div class="tgif-banner" id="tgif-banner" aria-hidden="true">
+      <div class="tgif-confetti" id="tgif-confetti"></div>
+      <span class="tgif-text" id="tgif-text"></span>
+      <span class="tgif-sub">You made it through the week</span>
     </div>
     <div id="agenda-events">{''.join(sections)}</div>
     <footer>
