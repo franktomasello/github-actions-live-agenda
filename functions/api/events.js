@@ -2,7 +2,7 @@
  * Cloudflare Pages Function — /api/events
  *
  * Fetches the ICS feed on each request and returns parsed events as JSON.
- * Short edge cache (10s) prevents hammering the ICS source on rapid polls.
+ * Short edge cache (2s) prevents hammering the ICS source on rapid polls.
  */
 export async function onRequestGet(context) {
   const { env } = context;
@@ -33,7 +33,7 @@ export async function onRequestGet(context) {
   return json(
     { events, timezone, generatedAt: new Date().toISOString() },
     200,
-    { 'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=20' },
+    { 'Cache-Control': 'public, s-maxage=2, stale-while-revalidate=5' },
   );
 }
 

@@ -21,7 +21,7 @@ _RENDER_JS = r"""
   'use strict';
   var TZ           = window.__AGENDA_TZ__;
   var WINDOW_HOURS = window.__AGENDA_WINDOW_HOURS__;
-  var POLL_MS      = 30000;
+  var POLL_MS      = 5000;
   var TICK_MS      = 1000;
 
   var currentSig   = null;
@@ -477,7 +477,7 @@ _RENDER_JS = r"""
   }
 
   function fetchAndUpdate() {
-    fetch('/api/events')
+    fetch('/api/events?_=' + Date.now())
       .then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         var ct = r.headers.get('content-type') || '';
@@ -995,7 +995,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       font-weight: 650;
       letter-spacing: -0.02em;
       line-height: 1;
-      color: var(--text-2);
+      color: var(--accent);
       font-variant-numeric: tabular-nums;
       font-feature-settings: "tnum";
       display: flex;
@@ -1016,12 +1016,13 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       font-size: 0.52rem;
       font-weight: 600;
       letter-spacing: 0.04em;
-      color: var(--text-3);
+      color: var(--accent);
+      opacity: 0.6;
       margin-left: 3px;
       text-transform: uppercase;
     }}
     .clock-dot {{
-      color: var(--text-3);
+      color: var(--accent);
       margin: 0 8px;
       font-size: 0.7rem;
       font-weight: 700;
@@ -1031,7 +1032,8 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     .clock-date {{
       font-size: 0.78rem;
       font-weight: 480;
-      color: var(--text-3);
+      color: var(--accent);
+      opacity: 0.6;
       letter-spacing: 0.01em;
     }}
 
@@ -1691,7 +1693,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     </div>
     <div id="agenda-events">{''.join(sections)}</div>
     <footer>
-      Live data &middot; Updates every&nbsp;30&nbsp;s &middot; Powered by Cloudflare&nbsp;Pages
+      Live data &middot; Updates every&nbsp;5&nbsp;s &middot; Powered by Cloudflare&nbsp;Pages
     </footer>
   </main>
   <button class="theme-toggle" aria-label="Toggle light/dark mode" title="Toggle theme">
