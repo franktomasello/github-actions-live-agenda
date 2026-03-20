@@ -3,6 +3,10 @@
  *
  * Fetches the ICS feed on each request and returns parsed events as JSON.
  * Short edge cache (2s) prevents hammering the ICS source on rapid polls.
+ *
+ * NOTE: Outlook's published ICS feeds have an inherent 15-30 min propagation
+ * delay on Microsoft's side. Changes to the calendar will not appear instantly
+ * in the ICS feed regardless of cache settings here.
  */
 export async function onRequestGet(context) {
   const { env } = context;
@@ -18,6 +22,7 @@ export async function onRequestGet(context) {
   let icsText;
   try {
     const resp = await fetch(icsUrl, {
+      cache: 'no-store',
       headers: {
         'User-Agent': 'github-actions-live-agenda/1.0',
         'Accept': 'text/calendar, text/plain, */*',
@@ -32,7 +37,13 @@ export async function onRequestGet(context) {
     return json({ error: `ICS fetch error: ${err.message}` }, 502);
   }
 
-  const events = parseICS(icsText, timezone, windowHrs, maxEvents);
+  let events;
+  try {
+    events = parseICS(icsText, timezone, windowHrs, maxEvents);
+  } catch (err) {
+    return json({ error: `ICS parse error: ${err.message}`, icsLength: icsText.length }, 500);
+  }
+
   return json(
     { events, timezone, generatedAt: new Date().toISOString() },
     200,
