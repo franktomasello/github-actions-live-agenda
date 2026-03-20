@@ -68,7 +68,12 @@ _RENDER_JS = r"""
   }
 
   // ── Time helpers ────────────────────────────────────────────────────────────
-  function fmtTime(iso) { return _fmtTime.format(new Date(iso)); }
+  // Use formatToParts (same path as the clock) so event times are
+  // *identical* in casing, spacing and precision to the live clock.
+  function fmtTime(iso) {
+    var p = clockParts(new Date(iso));
+    return p.hr + ':' + p.min + ' ' + p.period;
+  }
   function fmtTimeRange(s, e) { return fmtTime(s) + ' \u2013 ' + fmtTime(e); }
 
   function durStr(s, e) {
@@ -379,6 +384,14 @@ _RENDER_JS = r"""
       var badge = item.querySelector('.badge.live');
       if (badge) badge.textContent = rel;
 
+      // Keep displayed start time & range in sync with the clock formatter
+      if (!allDay) {
+        var tEl = item.querySelector('.t');
+        if (tEl) { var ft = fmtTime(start); if (tEl.textContent !== ft) tEl.textContent = ft; }
+        var rangeEl = item.querySelector('.range');
+        if (rangeEl) { var fr = fmtTimeRange(start, end); if (rangeEl.textContent !== fr) rangeEl.textContent = fr; }
+      }
+
       // Update progress bar
       var prog2 = progressInfo(start, end, allDay, now);
       if (prog2) {
@@ -605,6 +618,20 @@ def _fmt(dt: datetime, fmt_posix: str, fmt_win: str) -> str:
     return dt.strftime(fmt_win if _WIN else fmt_posix)
 
 
+def _fmt_clock(dt: datetime) -> str:
+    """Format a time identically to the JS clockParts() function.
+
+    Produces e.g. ``2:30 PM`` — no leading zero on the hour, two-digit
+    minutes, one plain space, then uppercase AM/PM.  This guarantees the
+    server-side initial render matches the client-side Intl.DateTimeFormat
+    output exactly so there is no flash of reformatted text on hydration.
+    """
+    hour = dt.hour % 12 or 12
+    minute = f"{dt.minute:02d}"
+    period = "AM" if dt.hour < 12 else "PM"
+    return f"{hour}:{minute} {period}"
+
+
 def section_title(reference: datetime, event: Event) -> str:
     if event.start.date() == reference.date():
         return "Today"
@@ -616,15 +643,13 @@ def section_title(reference: datetime, event: Event) -> str:
 def format_time(event: Event) -> str:
     if event.is_all_day:
         return "All day"
-    start = _fmt(event.start, "%-I:%M %p", "%#I:%M %p")
-    end = _fmt(event.end, "%-I:%M %p", "%#I:%M %p")
-    return f"{start} – {end}"
+    return f"{_fmt_clock(event.start)} – {_fmt_clock(event.end)}"
 
 
 def format_time_short(event: Event) -> str:
     if event.is_all_day:
         return "All day"
-    return _fmt(event.start, "%-I:%M %p", "%#I:%M %p")
+    return _fmt_clock(event.start)
 
 
 
@@ -813,9 +838,10 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     total_events = len(event_list)
 
     # Server-side clock (visible immediately, JS takes over on hydration)
-    _clock_hr = now.strftime("%I").lstrip("0") or "12"
-    _clock_min = now.strftime("%M")
-    _clock_period = now.strftime("%p")
+    # Uses the same logic as _fmt_clock / JS clockParts() for exact match.
+    _clock_hr = str(now.hour % 12 or 12)
+    _clock_min = f"{now.minute:02d}"
+    _clock_period = "AM" if now.hour < 12 else "PM"
     _clock_date = now.strftime("%A, %b %-d") if not _WIN else now.strftime("%A, %b %#d")
     _clock_html = (
         f'<span class="clock-hr">{_clock_hr}</span>'
