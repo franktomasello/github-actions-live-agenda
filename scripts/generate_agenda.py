@@ -68,7 +68,12 @@ _RENDER_JS = r"""
   }
 
   // ── Time helpers ────────────────────────────────────────────────────────────
-  function fmtTime(iso) { return _fmtTime.format(new Date(iso)); }
+  // Use formatToParts (same path as the clock) so event times are
+  // *identical* in casing, spacing and precision to the live clock.
+  function fmtTime(iso) {
+    var p = clockParts(new Date(iso));
+    return p.hr + ':' + p.min + ' ' + p.period;
+  }
   function fmtTimeRange(s, e) { return fmtTime(s) + ' \u2013 ' + fmtTime(e); }
 
   function durStr(s, e) {
@@ -379,6 +384,14 @@ _RENDER_JS = r"""
       var badge = item.querySelector('.badge.live');
       if (badge) badge.textContent = rel;
 
+      // Keep displayed start time & range in sync with the clock formatter
+      if (!allDay) {
+        var tEl = item.querySelector('.t');
+        if (tEl) { var ft = fmtTime(start); if (tEl.textContent !== ft) tEl.textContent = ft; }
+        var rangeEl = item.querySelector('.range');
+        if (rangeEl) { var fr = fmtTimeRange(start, end); if (rangeEl.textContent !== fr) rangeEl.textContent = fr; }
+      }
+
       // Update progress bar
       var prog2 = progressInfo(start, end, allDay, now);
       if (prog2) {
@@ -605,6 +618,20 @@ def _fmt(dt: datetime, fmt_posix: str, fmt_win: str) -> str:
     return dt.strftime(fmt_win if _WIN else fmt_posix)
 
 
+def _fmt_clock(dt: datetime) -> str:
+    """Format a time identically to the JS clockParts() function.
+
+    Produces e.g. ``2:30 PM`` — no leading zero on the hour, two-digit
+    minutes, one plain space, then uppercase AM/PM.  This guarantees the
+    server-side initial render matches the client-side Intl.DateTimeFormat
+    output exactly so there is no flash of reformatted text on hydration.
+    """
+    hour = dt.hour % 12 or 12
+    minute = f"{dt.minute:02d}"
+    period = "AM" if dt.hour < 12 else "PM"
+    return f"{hour}:{minute} {period}"
+
+
 def section_title(reference: datetime, event: Event) -> str:
     if event.start.date() == reference.date():
         return "Today"
@@ -616,15 +643,13 @@ def section_title(reference: datetime, event: Event) -> str:
 def format_time(event: Event) -> str:
     if event.is_all_day:
         return "All day"
-    start = _fmt(event.start, "%-I:%M %p", "%#I:%M %p")
-    end = _fmt(event.end, "%-I:%M %p", "%#I:%M %p")
-    return f"{start} – {end}"
+    return f"{_fmt_clock(event.start)} – {_fmt_clock(event.end)}"
 
 
 def format_time_short(event: Event) -> str:
     if event.is_all_day:
         return "All day"
-    return _fmt(event.start, "%-I:%M %p", "%#I:%M %p")
+    return _fmt_clock(event.start)
 
 
 
@@ -813,9 +838,10 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     total_events = len(event_list)
 
     # Server-side clock (visible immediately, JS takes over on hydration)
-    _clock_hr = now.strftime("%I").lstrip("0") or "12"
-    _clock_min = now.strftime("%M")
-    _clock_period = now.strftime("%p")
+    # Uses the same logic as _fmt_clock / JS clockParts() for exact match.
+    _clock_hr = str(now.hour % 12 or 12)
+    _clock_min = f"{now.minute:02d}"
+    _clock_period = "AM" if now.hour < 12 else "PM"
     _clock_date = now.strftime("%A, %b %-d") if not _WIN else now.strftime("%A, %b %#d")
     _clock_html = (
         f'<span class="clock-hr">{_clock_hr}</span>'
@@ -846,7 +872,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#000000" id="tc">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>">
   <title>{_esc(TITLE)}</title>
@@ -937,6 +963,9 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       max-width: 680px;
       margin: 0 auto;
       padding: 72px 32px 100px;
+      padding-left: max(32px, env(safe-area-inset-left, 0px));
+      padding-right: max(32px, env(safe-area-inset-right, 0px));
+      padding-bottom: max(100px, calc(80px + env(safe-area-inset-bottom, 0px)));
     }}
 
     /* ── Header ── */
@@ -949,15 +978,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       letter-spacing: -0.05em;
       line-height: 1.05;
       color: var(--text);
-      flex: 1;
-      min-width: 0;
       overflow-wrap: break-word;
-    }}
-    .hero-top {{
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 24px;
     }}
     @keyframes clock-separator-blink {{
       0%, 100% {{ opacity: 1; }}
@@ -965,29 +986,22 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     }}
     .clock {{
       display: flex;
-      flex-direction: column;
-      align-items: center;
-      flex-shrink: 0;
-      padding: 14px 20px;
-      background: var(--surface);
-      border: 1px solid var(--border-2);
-      border-radius: 16px;
-      box-shadow: var(--card-shadow);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      min-width: 130px;
+      align-items: baseline;
+      gap: 0;
+      margin-top: 12px;
     }}
     .clock-time {{
-      font-size: 1.75rem;
-      font-weight: 750;
-      letter-spacing: -0.035em;
+      font-size: 1.1rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
       line-height: 1;
-      color: var(--text);
+      color: var(--text-2);
       font-variant-numeric: tabular-nums;
       font-feature-settings: "tnum";
       display: flex;
       align-items: baseline;
       gap: 0;
+      white-space: nowrap;
     }}
     .clock-hr, .clock-min {{
       display: inline-block;
@@ -996,28 +1010,29 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     .clock-sep {{
       animation: clock-separator-blink 1s ease-in-out infinite;
       display: inline-block;
-      margin: 0 1px;
+      margin: 0 0.5px;
     }}
     .clock-period {{
-      font-size: 0.5rem;
+      font-size: 0.52rem;
       font-weight: 600;
       letter-spacing: 0.04em;
       color: var(--text-3);
       margin-left: 3px;
       text-transform: uppercase;
     }}
-    .clock-divider {{
-      width: 28px;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--border-2), transparent);
-      margin: 8px 0;
+    .clock-dot {{
+      color: var(--text-3);
+      margin: 0 8px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      line-height: 1;
+      opacity: .4;
     }}
     .clock-date {{
-      font-size: 0.62rem;
-      font-weight: 520;
+      font-size: 0.78rem;
+      font-weight: 480;
       color: var(--text-3);
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
+      letter-spacing: 0.01em;
     }}
 
     .hero-chips {{
@@ -1244,12 +1259,14 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 8px;
       margin-bottom: 6px;
     }}
     .card-time {{
       display: flex;
       align-items: baseline;
       gap: 8px;
+      flex-wrap: wrap;
     }}
     .t {{
       font-size: 0.73rem;
@@ -1368,12 +1385,13 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     /* Location */
     .loc {{
       display: inline-flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 5px;
       font-size: 0.7rem;
       color: var(--text-2);
       margin-top: 8px;
       font-weight: 440;
+      word-break: break-word;
     }}
     .loc svg {{
       opacity: .35;
@@ -1457,77 +1475,98 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
 
     /* ── Small mobile (≤480px) ── */
     @media (max-width: 480px) {{
-      .wrap {{ padding: 28px 16px 64px; }}
-      .hero {{ margin-bottom: 36px; }}
-      .hero h1 {{ font-size: 1.5rem; letter-spacing: -0.04em; }}
-      .hero-top {{ gap: 12px; align-items: flex-start; }}
-      .clock {{ padding: 10px 14px; min-width: 96px; border-radius: 12px; }}
-      .clock-time {{ font-size: 1.2rem; }}
-      .clock-period {{ font-size: 0.42rem; margin-left: 2px; }}
-      .clock-divider {{ width: 20px; margin: 5px 0; }}
-      .clock-date {{ font-size: 0.54rem; }}
-      .hero-chips {{ margin-top: 14px; gap: 5px; }}
-      .chip {{ padding: 4px 10px; font-size: 0.6rem; }}
-      .hero-next {{ margin-top: 14px; gap: 8px; padding: 10px 12px; border-radius: 10px; flex-wrap: wrap; }}
-      .hero-next-label {{ font-size: 0.54rem; padding: 3px 8px; }}
-      .hero-next-title {{ font-size: 0.82rem; width: 100%; order: 3; white-space: normal; }}
-      .hero-eta {{ font-size: 0.7rem; }}
-      .hero-live {{ font-size: 0.58rem; padding: 3px 10px; }}
+      .wrap {{
+        padding: 40px 18px 80px;
+        padding-left: max(18px, env(safe-area-inset-left, 0px));
+        padding-right: max(18px, env(safe-area-inset-right, 0px));
+        padding-bottom: max(80px, calc(64px + env(safe-area-inset-bottom, 0px)));
+      }}
+      .hero {{ margin-bottom: 32px; }}
+      .hero h1 {{ font-size: 1.55rem; letter-spacing: -0.04em; }}
+      .clock {{ margin-top: 8px; }}
+      .clock-time {{ font-size: 0.92rem; }}
+      .clock-period {{ font-size: 0.4rem; margin-left: 2px; }}
+      .clock-dot {{ margin: 0 6px; font-size: 0.6rem; }}
+      .clock-date {{ font-size: 0.68rem; }}
+      .hero-chips {{ margin-top: 16px; gap: 6px; }}
+      .chip {{ padding: 5px 11px; font-size: 0.62rem; }}
+      .hero-next {{
+        margin-top: 16px;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        flex-wrap: wrap;
+      }}
+      .hero-next-label {{ font-size: 0.56rem; padding: 4px 9px; }}
+      .hero-next-title {{
+        font-size: 0.84rem;
+        width: 100%;
+        order: 3;
+        white-space: normal;
+        line-height: 1.4;
+        margin-top: 2px;
+      }}
+      .hero-eta {{ font-size: 0.72rem; }}
+      .hero-live {{ font-size: 0.58rem; padding: 4px 10px; }}
       .day-group {{ margin-bottom: 28px; }}
-      .day-head {{ margin-bottom: 10px; gap: 8px; }}
-      .day-head h2 {{ font-size: 0.6rem; }}
-      .day-date {{ font-size: 0.6rem; }}
-      .cnt {{ font-size: 0.56rem; padding: 2px 8px; }}
-      .timeline {{ padding-left: 20px; }}
-      .tl-marker {{ left: -20px; top: 7px; }}
-      .tl-item::before {{ left: -14px; top: 14px; }}
-      .tl-item {{ padding-bottom: 10px; }}
-      .card {{ padding: 12px 14px 12px 16px; border-radius: 12px; }}
-      .card::before {{ top: 12px; bottom: 12px; }}
-      .card-top {{ margin-bottom: 4px; }}
-      .t {{ font-size: 0.68rem; }}
-      .dur {{ font-size: 0.58rem; padding: 2px 6px; }}
-      .card h3 {{ font-size: 0.88rem; margin-bottom: 2px; }}
-      .range {{ font-size: 0.65rem; }}
-      .countdown {{ font-size: 0.65rem; }}
-      .badge {{ font-size: 0.56rem; padding: 2px 8px; }}
-      .loc {{ font-size: 0.65rem; margin-top: 6px; }}
+      .day-head {{ margin-bottom: 12px; gap: 8px; }}
+      .day-head h2 {{ font-size: 0.62rem; }}
+      .day-date {{ font-size: 0.62rem; }}
+      .cnt {{ font-size: 0.56rem; padding: 3px 9px; }}
+      .timeline {{ padding-left: 22px; }}
+      .tl-marker {{ left: -22px; top: 8px; width: 16px; height: 16px; }}
+      .tl-item::before {{ left: -15px; top: 16px; }}
+      .tl-item {{ padding-bottom: 12px; }}
+      .card {{ padding: 14px 16px; border-radius: 12px; }}
+      .card::before {{ top: 14px; bottom: 14px; }}
+      .card-top {{ margin-bottom: 5px; }}
+      .t {{ font-size: 0.7rem; }}
+      .dur {{ font-size: 0.58rem; padding: 2px 7px; }}
+      .card h3 {{ font-size: 0.9rem; margin-bottom: 3px; }}
+      .range {{ font-size: 0.66rem; }}
+      .countdown {{ font-size: 0.66rem; }}
+      .badge {{ font-size: 0.56rem; padding: 3px 9px; }}
+      .loc {{ font-size: 0.66rem; margin-top: 8px; }}
       .progress-wrap {{ margin-top: 10px; }}
-      .progress-meta {{ margin-top: 4px; }}
-      .progress-pct, .progress-remain {{ font-size: 0.58rem; }}
+      .progress-meta {{ margin-top: 5px; }}
+      .progress-pct, .progress-remain {{ font-size: 0.6rem; }}
       details {{ margin-top: 8px; }}
-      summary {{ font-size: 0.68rem; }}
-      .notes {{ font-size: 0.68rem; padding: 8px 12px; border-radius: 8px; }}
-      .empty-state {{ padding: 40px 20px; }}
+      summary {{ font-size: 0.7rem; padding: 5px 0; }}
+      .notes {{ font-size: 0.7rem; padding: 10px 14px; border-radius: 8px; line-height: 1.65; }}
+      .empty-state {{ padding: 44px 22px; border-radius: 16px; }}
       .empty-state h2 {{ font-size: 1rem; }}
-      .empty-state p {{ font-size: 0.8rem; }}
-      footer {{ margin-top: 40px; font-size: 0.6rem; }}
+      .empty-state p {{ font-size: 0.82rem; }}
+      footer {{ margin-top: 40px; font-size: 0.6rem; padding-bottom: env(safe-area-inset-bottom, 0px); }}
     }}
 
     /* ── Standard mobile (481px–700px) ── */
     @media (min-width: 481px) and (max-width: 700px) {{
-      .wrap {{ padding: 40px 20px 80px; }}
-      .hero {{ margin-bottom: 40px; }}
-      .hero h1 {{ font-size: 1.8rem; }}
-      .hero-top {{ gap: 16px; align-items: flex-start; }}
-      .clock {{ padding: 12px 16px; min-width: 110px; border-radius: 14px; }}
-      .clock-time {{ font-size: 1.5rem; }}
-      .clock-period {{ font-size: 0.46rem; margin-left: 3px; }}
-      .clock-divider {{ width: 24px; margin: 7px 0; }}
-      .clock-date {{ font-size: 0.58rem; }}
-      .hero-chips {{ margin-top: 18px; gap: 6px; }}
-      .chip {{ padding: 5px 12px; font-size: 0.64rem; }}
-      .hero-next {{ margin-top: 16px; padding: 12px 16px; border-radius: 12px; }}
-      .hero-next-title {{ font-size: 0.85rem; }}
-      .day-group {{ margin-bottom: 32px; }}
-      .day-head {{ margin-bottom: 12px; }}
-      .timeline {{ padding-left: 24px; }}
-      .tl-marker {{ left: -24px; }}
-      .tl-item::before {{ left: -18px; }}
-      .tl-item {{ padding-bottom: 12px; }}
-      .card {{ padding: 14px 18px 14px 18px; border-radius: 14px; }}
-      .card h3 {{ font-size: 0.92rem; }}
-      footer {{ margin-top: 48px; }}
+      .wrap {{
+        padding: 48px 24px 88px;
+        padding-left: max(24px, env(safe-area-inset-left, 0px));
+        padding-right: max(24px, env(safe-area-inset-right, 0px));
+        padding-bottom: max(88px, calc(72px + env(safe-area-inset-bottom, 0px)));
+      }}
+      .hero {{ margin-bottom: 44px; }}
+      .hero h1 {{ font-size: 1.85rem; }}
+      .clock {{ margin-top: 10px; }}
+      .clock-time {{ font-size: 1rem; }}
+      .clock-period {{ font-size: 0.44rem; margin-left: 2px; }}
+      .clock-dot {{ margin: 0 7px; font-size: 0.65rem; }}
+      .clock-date {{ font-size: 0.72rem; }}
+      .hero-chips {{ margin-top: 18px; gap: 7px; }}
+      .chip {{ padding: 5px 12px; font-size: 0.65rem; }}
+      .hero-next {{ margin-top: 18px; padding: 13px 16px; border-radius: 12px; }}
+      .hero-next-title {{ font-size: 0.86rem; }}
+      .day-group {{ margin-bottom: 34px; }}
+      .day-head {{ margin-bottom: 13px; }}
+      .timeline {{ padding-left: 26px; }}
+      .tl-marker {{ left: -26px; }}
+      .tl-item::before {{ left: -19px; }}
+      .tl-item {{ padding-bottom: 14px; }}
+      .card {{ padding: 16px 18px; border-radius: 14px; }}
+      .card h3 {{ font-size: 0.94rem; }}
+      footer {{ margin-top: 48px; padding-bottom: env(safe-area-inset-bottom, 0px); }}
     }}
 
     /* ── Large desktop (>900px) ── */
@@ -1535,11 +1574,11 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .wrap {{ max-width: 720px; padding: 80px 40px 120px; }}
       .hero {{ margin-bottom: 56px; }}
       .hero h1 {{ font-size: 2.8rem; }}
-      .hero-top {{ gap: 28px; }}
-      .clock {{ padding: 16px 24px; min-width: 140px; border-radius: 18px; }}
-      .clock-time {{ font-size: 1.85rem; }}
-      .clock-period {{ font-size: 0.52rem; margin-left: 4px; }}
-      .clock-divider {{ margin: 9px 0; width: 30px; }}
+      .clock {{ margin-top: 14px; }}
+      .clock-time {{ font-size: 1.2rem; }}
+      .clock-period {{ font-size: 0.54rem; margin-left: 3px; }}
+      .clock-dot {{ margin: 0 10px; font-size: 0.75rem; }}
+      .clock-date {{ font-size: 0.84rem; }}
       .hero-chips {{ margin-top: 24px; gap: 8px; }}
       .chip {{ padding: 6px 14px; font-size: 0.7rem; }}
       .hero-next {{ padding: 14px 20px; }}
@@ -1604,11 +1643,21 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     [data-theme="light"] .theme-toggle .icon-moon {{ opacity: 0; transform: rotate(90deg) scale(.5); }}
 
     @media (max-width: 480px) {{
-      .theme-toggle {{ bottom: 14px; right: 14px; width: 38px; height: 38px; }}
+      .theme-toggle {{
+        bottom: max(16px, env(safe-area-inset-bottom, 0px));
+        right: max(16px, env(safe-area-inset-right, 0px));
+        width: 42px;
+        height: 42px;
+      }}
       .theme-toggle svg {{ width: 16px; height: 16px; }}
     }}
     @media (min-width: 481px) and (max-width: 700px) {{
-      .theme-toggle {{ bottom: 18px; right: 18px; width: 42px; height: 42px; }}
+      .theme-toggle {{
+        bottom: max(20px, env(safe-area-inset-bottom, 0px));
+        right: max(20px, env(safe-area-inset-right, 0px));
+        width: 42px;
+        height: 42px;
+      }}
     }}
 
     /* ── Reduce motion ── */
@@ -1627,13 +1676,11 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
 <body>
   <main class="wrap">
     <div class="hero fade-in">
-      <div class="hero-top">
-        <h1>{_esc(TITLE)}</h1>
-        <div class="clock" aria-live="polite" aria-label="Current time">
-          <span class="clock-time" id="clock-time">{_clock_html}</span>
-          <div class="clock-divider"></div>
-          <span class="clock-date" id="clock-date">{_clock_date}</span>
-        </div>
+      <h1>{_esc(TITLE)}</h1>
+      <div class="clock" aria-live="polite" aria-label="Current time">
+        <span class="clock-time" id="clock-time">{_clock_html}</span>
+        <span class="clock-dot">&middot;</span>
+        <span class="clock-date" id="clock-date">{_clock_date}</span>
       </div>
       <div class="hero-chips">
         <span class="chip">{WINDOW_HOURS}h window</span>
