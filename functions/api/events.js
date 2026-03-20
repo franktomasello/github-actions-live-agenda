@@ -17,11 +17,16 @@ export async function onRequestGet(context) {
 
   let icsText;
   try {
-    const resp = await fetch(icsUrl, {
+    // Cache-bust the ICS URL to bypass any intermediate CDN/proxy caching
+    const bustUrl = new URL(icsUrl);
+    bustUrl.searchParams.set('_cb', Date.now());
+
+    const resp = await fetch(bustUrl.toString(), {
       headers: {
         'User-Agent': 'github-actions-live-agenda/1.0',
         'Accept': 'text/calendar, text/plain, */*',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
       },
       cf: { cacheTtl: 0, cacheEverything: false },
     });
