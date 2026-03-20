@@ -1762,7 +1762,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     </div>
     <div id="agenda-events">{''.join(sections)}</div>
     <footer>
-      Live data &middot; Polls every&nbsp;5&nbsp;s &middot; Calendar sync may take a few&nbsp;min &middot; Powered by Cloudflare&nbsp;Pages
+      Live data &middot; Powered by Cloudflare&nbsp;Pages
     </footer>
   </main>
   <button class="theme-toggle" aria-label="Toggle light/dark mode" title="Toggle theme">
