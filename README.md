@@ -144,7 +144,3 @@ open site/index.html
 <br>
 
 ---
-
-<div align="center">
-<sub>Built with vanilla JS · No dependencies · No frameworks · Just vibes</sub>
-</div>
