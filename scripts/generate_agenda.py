@@ -995,7 +995,8 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       font-weight: 650;
       letter-spacing: -0.02em;
       line-height: 1;
-      color: var(--accent);
+      color: var(--text);
+      font-weight: 800;
       font-variant-numeric: tabular-nums;
       font-feature-settings: "tnum";
       display: flex;
@@ -1014,15 +1015,14 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     }}
     .clock-period {{
       font-size: 0.52rem;
-      font-weight: 600;
+      font-weight: 800;
       letter-spacing: 0.04em;
-      color: var(--accent);
-      opacity: 0.6;
+      color: var(--text);
       margin-left: 3px;
       text-transform: uppercase;
     }}
     .clock-dot {{
-      color: var(--accent);
+      color: var(--text);
       margin: 0 8px;
       font-size: 0.7rem;
       font-weight: 700;
@@ -1031,9 +1031,8 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     }}
     .clock-date {{
       font-size: 0.78rem;
-      font-weight: 480;
-      color: var(--accent);
-      opacity: 0.6;
+      font-weight: 800;
+      color: var(--text);
       letter-spacing: 0.01em;
     }}
 
