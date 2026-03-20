@@ -978,15 +978,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       letter-spacing: -0.05em;
       line-height: 1.05;
       color: var(--text);
-      flex: 1;
-      min-width: 0;
       overflow-wrap: break-word;
-    }}
-    .hero-top {{
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 24px;
     }}
     @keyframes clock-separator-blink {{
       0%, 100% {{ opacity: 1; }}
@@ -994,24 +986,16 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     }}
     .clock {{
       display: flex;
-      flex-direction: column;
-      align-items: center;
-      flex-shrink: 0;
-      padding: 12px 18px;
-      background: var(--surface);
-      border: 1px solid var(--border-2);
-      border-radius: 14px;
-      box-shadow: var(--card-shadow);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      min-width: 0;
+      align-items: baseline;
+      gap: 0;
+      margin-top: 12px;
     }}
     .clock-time {{
-      font-size: 1.65rem;
-      font-weight: 750;
-      letter-spacing: -0.03em;
+      font-size: 1.1rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
       line-height: 1;
-      color: var(--text);
+      color: var(--text-2);
       font-variant-numeric: tabular-nums;
       font-feature-settings: "tnum";
       display: flex;
@@ -1029,25 +1013,26 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       margin: 0 0.5px;
     }}
     .clock-period {{
-      font-size: 0.48rem;
+      font-size: 0.52rem;
       font-weight: 600;
       letter-spacing: 0.04em;
       color: var(--text-3);
       margin-left: 3px;
       text-transform: uppercase;
     }}
-    .clock-divider {{
-      width: 24px;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--border-2), transparent);
-      margin: 6px 0;
+    .clock-dot {{
+      color: var(--text-3);
+      margin: 0 8px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      line-height: 1;
+      opacity: .4;
     }}
     .clock-date {{
-      font-size: 0.6rem;
-      font-weight: 520;
+      font-size: 0.78rem;
+      font-weight: 480;
       color: var(--text-3);
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
+      letter-spacing: 0.01em;
     }}
 
     .hero-chips {{
@@ -1498,12 +1483,11 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       }}
       .hero {{ margin-bottom: 32px; }}
       .hero h1 {{ font-size: 1.55rem; letter-spacing: -0.04em; }}
-      .hero-top {{ gap: 14px; align-items: flex-start; }}
-      .clock {{ padding: 8px 12px; border-radius: 10px; }}
-      .clock-time {{ font-size: 1.15rem; }}
+      .clock {{ margin-top: 8px; }}
+      .clock-time {{ font-size: 0.92rem; }}
       .clock-period {{ font-size: 0.4rem; margin-left: 2px; }}
-      .clock-divider {{ width: 18px; margin: 4px 0; }}
-      .clock-date {{ font-size: 0.5rem; }}
+      .clock-dot {{ margin: 0 6px; font-size: 0.6rem; }}
+      .clock-date {{ font-size: 0.68rem; }}
       .hero-chips {{ margin-top: 16px; gap: 6px; }}
       .chip {{ padding: 5px 11px; font-size: 0.62rem; }}
       .hero-next {{
@@ -1565,12 +1549,11 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       }}
       .hero {{ margin-bottom: 44px; }}
       .hero h1 {{ font-size: 1.85rem; }}
-      .hero-top {{ gap: 18px; align-items: flex-start; }}
-      .clock {{ padding: 10px 15px; border-radius: 12px; }}
-      .clock-time {{ font-size: 1.4rem; }}
+      .clock {{ margin-top: 10px; }}
+      .clock-time {{ font-size: 1rem; }}
       .clock-period {{ font-size: 0.44rem; margin-left: 2px; }}
-      .clock-divider {{ width: 22px; margin: 5px 0; }}
-      .clock-date {{ font-size: 0.55rem; }}
+      .clock-dot {{ margin: 0 7px; font-size: 0.65rem; }}
+      .clock-date {{ font-size: 0.72rem; }}
       .hero-chips {{ margin-top: 18px; gap: 7px; }}
       .chip {{ padding: 5px 12px; font-size: 0.65rem; }}
       .hero-next {{ margin-top: 18px; padding: 13px 16px; border-radius: 12px; }}
@@ -1591,11 +1574,11 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .wrap {{ max-width: 720px; padding: 80px 40px 120px; }}
       .hero {{ margin-bottom: 56px; }}
       .hero h1 {{ font-size: 2.8rem; }}
-      .hero-top {{ gap: 28px; }}
-      .clock {{ padding: 14px 22px; border-radius: 16px; }}
-      .clock-time {{ font-size: 1.8rem; }}
-      .clock-period {{ font-size: 0.5rem; margin-left: 3px; }}
-      .clock-divider {{ margin: 7px 0; width: 26px; }}
+      .clock {{ margin-top: 14px; }}
+      .clock-time {{ font-size: 1.2rem; }}
+      .clock-period {{ font-size: 0.54rem; margin-left: 3px; }}
+      .clock-dot {{ margin: 0 10px; font-size: 0.75rem; }}
+      .clock-date {{ font-size: 0.84rem; }}
       .hero-chips {{ margin-top: 24px; gap: 8px; }}
       .chip {{ padding: 6px 14px; font-size: 0.7rem; }}
       .hero-next {{ padding: 14px 20px; }}
@@ -1693,13 +1676,11 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
 <body>
   <main class="wrap">
     <div class="hero fade-in">
-      <div class="hero-top">
-        <h1>{_esc(TITLE)}</h1>
-        <div class="clock" aria-live="polite" aria-label="Current time">
-          <span class="clock-time" id="clock-time">{_clock_html}</span>
-          <div class="clock-divider"></div>
-          <span class="clock-date" id="clock-date">{_clock_date}</span>
-        </div>
+      <h1>{_esc(TITLE)}</h1>
+      <div class="clock" aria-live="polite" aria-label="Current time">
+        <span class="clock-time" id="clock-time">{_clock_html}</span>
+        <span class="clock-dot">&middot;</span>
+        <span class="clock-date" id="clock-date">{_clock_date}</span>
       </div>
       <div class="hero-chips">
         <span class="chip">{WINDOW_HOURS}h window</span>
