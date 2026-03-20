@@ -28,14 +28,14 @@ flowchart TB
 
     subgraph B ["Cloudflare Pages"]
         direction TB
-        C["<b>generate_agenda.py</b><br/><br/>Build-time HTML<br/>shell + assets"]
-        D["<b>/api/events</b><br/>(Pages Function)<br/><br/>Live ICS → JSON<br/>30s edge cache"]
-        E["<b>Client-side JS</b><br/><br/>• Polls /api/events every 30s<br/>• 1s tick for countdowns &amp; progress<br/>• Signature diffing, no wasted renders<br/>• Instant refresh on tab focus"]
+        C["generate_agenda.py<br/>Static HTML shell"]
+        D["/api/events<br/>Live ICS → JSON"]
+        E["Client-side JS<br/>30s poll · 1s tick"]
         C --> E
         D --> E
     end
 
-    E --> F["Cloudflare Access<br/>(email-gated auth)"]
+    E --> F["Cloudflare Access"]
 ```
 
 <br>
