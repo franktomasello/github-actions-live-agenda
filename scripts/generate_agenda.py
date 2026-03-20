@@ -273,6 +273,9 @@ _RENDER_JS = r"""
 
     // Hero next-up
     updateHero(events, now, animate);
+
+    // TGIF banner — only on Friday when no events
+    updateTGIF(events.length > 0);
   }
 
   function updateHero(events, now, animate) {
@@ -528,53 +531,65 @@ _RENDER_JS = r"""
     if (!document.hidden) fetchAndUpdate();
   });
 
-  // ── TGIF Friday Banner ──────────────────────────────────────────────────────
-  (function initTGIF() {
+  // ── TGIF Friday Banner (only when empty state + Friday) ─────────────────────
+  var _tgifInitialized = false;
+
+  function updateTGIF(hasEvents) {
     var fmt = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'long' });
     var dayName = fmt.format(new Date());
-    if (dayName !== 'Friday') return;
+    var isFriday = dayName === 'Friday';
+    var showBanner = isFriday && !hasEvents;
 
     var banner = document.getElementById('tgif-banner');
-    var textEl = document.getElementById('tgif-text');
-    var confettiEl = document.getElementById('tgif-confetti');
-    if (!banner || !textEl) return;
+    if (!banner) return;
 
-    // Animate each letter with staggered wave
-    var phrase = 'THANK GOD IT\'S FRIDAY!';
-    var html = '';
-    for (var i = 0; i < phrase.length; i++) {
-      if (phrase[i] === ' ') {
-        html += '<span style="width:6px;display:inline-block"></span>';
-      } else {
-        var delay = (i * 0.08);
-        html += '<span class="tgif-letter" style="animation-delay:' + delay + 's,' + delay + 's">' + phrase[i] + '</span>';
-      }
+    if (!showBanner) {
+      banner.style.display = 'none';
+      banner.setAttribute('aria-hidden', 'true');
+      return;
     }
-    textEl.innerHTML = html;
 
-    // Confetti particles
-    if (confettiEl) {
-      var colors = ['#ff9f0a','#ff375f','#af52de','#5e5ce6','#007aff','#30d158','#ffd60a'];
-      for (var c = 0; c < 30; c++) {
-        var p = document.createElement('span');
-        p.className = 'tgif-particle';
-        var left = Math.random() * 100;
-        var dur = 2 + Math.random() * 3;
-        var del = Math.random() * 4;
-        var size = 4 + Math.random() * 4;
-        var color = colors[Math.floor(Math.random() * colors.length)];
-        var rot = Math.random() * 360;
-        p.style.cssText = 'left:' + left + '%;width:' + size + 'px;height:' + size
-          + 'px;background:' + color + ';animation-duration:' + dur
-          + 's;animation-delay:' + del + 's;transform:rotate(' + rot + 'deg);border-radius:'
-          + (Math.random() > 0.5 ? '50%' : '1px');
-        confettiEl.appendChild(p);
+    // Initialize letter animation + confetti once
+    if (!_tgifInitialized) {
+      var textEl = document.getElementById('tgif-text');
+      var confettiEl = document.getElementById('tgif-confetti');
+      if (textEl) {
+        var phrase = 'THANK GOD IT\'S FRIDAY!';
+        var html = '';
+        for (var i = 0; i < phrase.length; i++) {
+          if (phrase[i] === ' ') {
+            html += '<span style="width:6px;display:inline-block"></span>';
+          } else {
+            var delay = (i * 0.08);
+            html += '<span class="tgif-letter" style="animation-delay:' + delay + 's,' + delay + 's">' + phrase[i] + '</span>';
+          }
+        }
+        textEl.innerHTML = html;
       }
+      if (confettiEl) {
+        var colors = ['#ff9f0a','#ff375f','#af52de','#5e5ce6','#007aff','#30d158','#ffd60a'];
+        for (var c = 0; c < 30; c++) {
+          var p = document.createElement('span');
+          p.className = 'tgif-particle';
+          var left = Math.random() * 100;
+          var dur = 2 + Math.random() * 3;
+          var del = Math.random() * 4;
+          var size = 4 + Math.random() * 4;
+          var color = colors[Math.floor(Math.random() * colors.length)];
+          var rot = Math.random() * 360;
+          p.style.cssText = 'left:' + left + '%;width:' + size + 'px;height:' + size
+            + 'px;background:' + color + ';animation-duration:' + dur
+            + 's;animation-delay:' + del + 's;transform:rotate(' + rot + 'deg);border-radius:'
+            + (Math.random() > 0.5 ? '50%' : '1px');
+          confettiEl.appendChild(p);
+        }
+      }
+      _tgifInitialized = true;
     }
 
     banner.style.display = 'block';
     banner.setAttribute('aria-hidden', 'false');
-  })();
+  }
 })();
 """
 
