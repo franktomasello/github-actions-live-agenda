@@ -29,7 +29,6 @@ export async function onRequestGet(context) {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
       },
-      cf: { cacheTtl: 0, cacheEverything: false },
     });
     if (!resp.ok) return json({ error: `ICS fetch failed: HTTP ${resp.status}` }, 502);
     icsText = await resp.text();
