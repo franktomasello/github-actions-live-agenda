@@ -131,6 +131,7 @@ const WIN_TZ = {
   'Georgian Standard Time': 'Asia/Tbilisi',
   'Greenland Standard Time': 'America/Godthab',
   'Greenwich Standard Time': 'Atlantic/Reykjavik',
+  'Haiti Standard Time': 'America/Port-au-Prince',
   'Hawaiian Standard Time': 'Pacific/Honolulu',
   'India Standard Time': 'Asia/Calcutta',
   'Iran Standard Time': 'Asia/Tehran',
@@ -180,8 +181,15 @@ const WIN_TZ = {
   'Yakutsk Standard Time': 'Asia/Yakutsk',
 };
 
-function resolveTimezone(tz) {
-  return WIN_TZ[tz] || tz;
+function resolveTimezone(tz, fallback) {
+  const candidate = WIN_TZ[tz] || tz;
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: candidate });
+    return candidate;
+  } catch {
+    // Unknown timezone — fall back to the configured default
+    return fallback || 'UTC';
+  }
 }
 
 // ── ICS datetime parsing ─────────────────────────────────────────────────────
@@ -203,7 +211,8 @@ function parseDatetime(value, params, defaultTz) {
     return { dt: new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, +s)), isAllDay: false };
   }
 
-  const tzid = resolveTimezone((params.match(/TZID=([^;]+)/i) || [])[1] || defaultTz);
+  const rawTz = (params.match(/TZID=([^;]+)/i) || [])[1] || defaultTz;
+  const tzid = resolveTimezone(rawTz, defaultTz);
   return { dt: localToUTC(+y, +mo - 1, +d, +h, +mi, +s, tzid), isAllDay: false };
 }
 
