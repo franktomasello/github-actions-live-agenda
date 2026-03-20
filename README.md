@@ -1,81 +1,110 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/python-3.12+-3776ab?style=flat-square&logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/deploy-Cloudflare%20Pages-f38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Pages">
-  <img src="https://img.shields.io/badge/auth-Cloudflare%20Access-f38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Access">
-</p>
+<div align="center">
 
-# Live Agenda
+<br>
 
-> **https://github-actions-live-agenda.pages.dev**
+# `Live Agenda`
 
-A private, live-updating agenda page generated from an ICS calendar feed. Dark mode by default with a light/dark toggle. Deployed to Cloudflare Pages, secured with Cloudflare Access.
+**A private, real-time agenda dashboard powered by your calendar.**
+
+[![Python](https://img.shields.io/badge/python-3.12+-3776ab?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![Cloudflare Pages](https://img.shields.io/badge/Cloudflare%20Pages-f38020?style=for-the-badge&logo=cloudflare&logoColor=white)](https://pages.cloudflare.com)
+[![Cloudflare Access](https://img.shields.io/badge/Cloudflare%20Access-f38020?style=for-the-badge&logo=cloudflare&logoColor=white)](https://www.cloudflare.com/zero-trust/products/access/)
+
+<br>
+
+<sub>Dark mode by default · Glassmorphism UI · Secured with Cloudflare Access</sub>
 
 ---
 
-## How it works
+</div>
+
+<br>
+
+## Architecture
 
 ```
-Outlook / Reclaim / Google  →  ICS feed
-                                  ↓
-              ┌───────────────────┴───────────────────┐
-              │                                       │
-    generate_agenda.py                     /api/events (CF Function)
-    builds static HTML shell               fetches ICS live per request
-              │                                       │
-     site/index.html                          JSON → client JS
-              │                                       │
-              └───────────────────┬───────────────────┘
-                                  ↓
-                          Cloudflare Pages
-                                  ↓
-                          Cloudflare Access
-                       (email-gated auth)
+┌─────────────────────────────┐
+│  Outlook / Google / Reclaim │
+│        Calendar             │
+└─────────────┬───────────────┘
+              │ ICS feed
+              ▼
+┌─────────────────────────────────────────────────┐
+│              Cloudflare Pages                   │
+│                                                 │
+│   ┌─────────────────┐   ┌───────────────────┐   │
+│   │ generate_agenda  │   │   /api/events     │   │
+│   │     .py          │   │   (Pages Fn)      │   │
+│   │                  │   │                   │   │
+│   │ Build-time HTML  │   │ Live ICS → JSON   │   │
+│   │ shell + assets   │   │ 30s edge cache    │   │
+│   └────────┬─────────┘   └────────┬──────────┘   │
+│            │                      │              │
+│            ▼                      ▼              │
+│   ┌──────────────────────────────────────────┐   │
+│   │           Client-side JS                 │   │
+│   │                                          │   │
+│   │  • Polls /api/events every 30s           │   │
+│   │  • 1s tick for countdowns & progress     │   │
+│   │  • Signature diffing — no wasted renders │   │
+│   │  • Instant refresh on tab focus          │   │
+│   └──────────────────────────────────────────┘   │
+│                      │                           │
+│              Cloudflare Access                   │
+│            (email-gated auth)                    │
+└─────────────────────────────────────────────────┘
 ```
 
-The static HTML is the initial shell. A Cloudflare Pages Function (`/api/events`) fetches the ICS feed live on every request. Client-side JS polls every 30 seconds and updates the DOM without page reloads.
+<br>
 
 ## Features
 
-- **Live data** — polls every 30s via Cloudflare Pages Function, no rebuild needed
-- **Timeline UI** — events grouped by day with color-coded accent bars and staggered animations
-- **Live indicators** — pulsing dot and "Now" / "In progress" badges for current events
-- **Dark / Light mode** — dark by default, toggle persisted in `localStorage`
-- **Smart updates** — lightweight tick every 15s updates countdowns without full re-render
-- **Tab-aware** — fetches fresh data immediately when you switch back to the tab
-- **Responsive** — optimized for desktop, tablet, and mobile
-- **Glassmorphism** — frosted-glass cards with `backdrop-filter: blur()`
-- **Accessible** — `prefers-reduced-motion` support, semantic HTML, print styles
-- **Edge-cached** — 10s `s-maxage` on API responses to avoid hammering the ICS source
+| | Feature | Detail |
+|---|---|---|
+| **⚡** | **Live data** | Polls every 30s via edge function — no rebuild needed |
+| **🕐** | **Real-time UI** | 1s tick updates countdowns, progress bars, and clock |
+| **📅** | **Timeline view** | Events grouped by day with color-coded accent bars |
+| **🔴** | **Live indicators** | Pulsing dot + "Now" / "In progress" badges |
+| **🌗** | **Dark / Light mode** | Dark by default, toggle persisted in `localStorage` |
+| **🧊** | **Glassmorphism** | Frosted-glass cards with `backdrop-filter: blur()` |
+| **📱** | **Responsive** | Optimized for desktop, tablet, and mobile |
+| **👁** | **Tab-aware** | Fetches fresh data the moment you switch back |
+| **♿** | **Accessible** | `prefers-reduced-motion`, semantic HTML, print styles |
+| **🌐** | **Edge-cached** | 30s `s-maxage` + stale-while-revalidate on API |
 
-## Repo structure
+<br>
+
+## Repo Structure
 
 ```
 .
 ├── scripts/
-│   └── generate_agenda.py   # Fetches ICS → generates site/index.html + agenda.json
+│   └── generate_agenda.py    # ICS → static HTML shell + agenda.json
 ├── functions/
 │   └── api/
-│       └── events.js        # CF Pages Function — live ICS → JSON endpoint
-├── site/                    # Build output (not committed)
-├── requirements.txt         # icalendar>=6.0.0
+│       └── events.js         # CF Pages Function — live ICS → JSON
+├── site/                     # Build output (not committed)
+├── requirements.txt          # icalendar>=6.0.0
 └── README.md
 ```
 
+<br>
+
 ## Setup
 
-### 1. Get your ICS link
+### 1 — Get your ICS link
 
-Outlook: **Calendar → Settings → Shared calendars → Publish a calendar** → copy the **ICS** URL.
+> **Outlook** → Settings → Calendar → Shared calendars → Publish a calendar → copy the **ICS** URL
 
-### 2. Deploy to Cloudflare Pages
+### 2 — Deploy to Cloudflare Pages
 
-1. **Cloudflare dashboard** → Workers & Pages → Create → Pages → Connect to Git
+1. **Cloudflare Dashboard** → Workers & Pages → Create → Pages → Connect to Git
 2. Select this repo
 3. Build configuration:
 
    | Field | Value |
    |---|---|
-   | Framework preset | None |
+   | Framework preset | `None` |
    | Build command | `pip install -r requirements.txt && python scripts/generate_agenda.py` |
    | Output directory | `site` |
 
@@ -89,16 +118,18 @@ Outlook: **Calendar → Settings → Shared calendars → Publish a calendar** �
    | `WINDOW_HOURS` | No | `48` |
    | `MAX_EVENTS` | No | `40` |
 
-5. Deploy
+5. Deploy 🚀
 
-### 3. Lock it down with Cloudflare Access
+### 3 — Lock it down with Cloudflare Access
 
-1. **one.dash.cloudflare.com** → Access → Applications → Add → Self-hosted
+1. **Zero Trust Dashboard** → Access → Applications → Add → Self-hosted
 2. Domain: your `.pages.dev` URL
 3. Policy: **Allow** → Selector: **Emails** → your email
-4. Save — visitors now need a one-time email code
+4. Save — visitors now need a one-time email code 🔒
 
-## Local dev
+<br>
+
+## Local Development
 
 ```bash
 export ICS_URL='https://...'
@@ -107,4 +138,13 @@ python scripts/generate_agenda.py
 open site/index.html
 ```
 
-> Note: The `/api/events` endpoint only runs on Cloudflare. Locally, the page shows build-time data.
+> [!NOTE]
+> The `/api/events` endpoint only runs on Cloudflare. Locally, the page shows build-time data only.
+
+<br>
+
+---
+
+<div align="center">
+<sub>Built with vanilla JS · No dependencies · No frameworks · Just vibes</sub>
+</div>
