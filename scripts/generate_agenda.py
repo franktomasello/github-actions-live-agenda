@@ -971,19 +971,19 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       flex-direction: column;
       align-items: center;
       flex-shrink: 0;
-      padding: 14px 20px;
+      padding: 12px 18px;
       background: var(--surface);
       border: 1px solid var(--border-2);
-      border-radius: 16px;
+      border-radius: 14px;
       box-shadow: var(--card-shadow);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
-      min-width: 130px;
+      min-width: 0;
     }}
     .clock-time {{
-      font-size: 1.75rem;
+      font-size: 1.65rem;
       font-weight: 750;
-      letter-spacing: -0.035em;
+      letter-spacing: -0.03em;
       line-height: 1;
       color: var(--text);
       font-variant-numeric: tabular-nums;
@@ -991,6 +991,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       display: flex;
       align-items: baseline;
       gap: 0;
+      white-space: nowrap;
     }}
     .clock-hr, .clock-min {{
       display: inline-block;
@@ -999,10 +1000,10 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     .clock-sep {{
       animation: clock-separator-blink 1s ease-in-out infinite;
       display: inline-block;
-      margin: 0 1px;
+      margin: 0 0.5px;
     }}
     .clock-period {{
-      font-size: 0.5rem;
+      font-size: 0.48rem;
       font-weight: 600;
       letter-spacing: 0.04em;
       color: var(--text-3);
@@ -1010,13 +1011,13 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       text-transform: uppercase;
     }}
     .clock-divider {{
-      width: 28px;
+      width: 24px;
       height: 1px;
       background: linear-gradient(90deg, transparent, var(--border-2), transparent);
-      margin: 8px 0;
+      margin: 6px 0;
     }}
     .clock-date {{
-      font-size: 0.62rem;
+      font-size: 0.6rem;
       font-weight: 520;
       color: var(--text-3);
       letter-spacing: 0.06em;
@@ -1472,11 +1473,11 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .hero {{ margin-bottom: 32px; }}
       .hero h1 {{ font-size: 1.55rem; letter-spacing: -0.04em; }}
       .hero-top {{ gap: 14px; align-items: flex-start; }}
-      .clock {{ padding: 10px 14px; min-width: 96px; border-radius: 12px; }}
-      .clock-time {{ font-size: 1.2rem; }}
-      .clock-period {{ font-size: 0.42rem; margin-left: 2px; }}
-      .clock-divider {{ width: 20px; margin: 5px 0; }}
-      .clock-date {{ font-size: 0.54rem; }}
+      .clock {{ padding: 8px 12px; border-radius: 10px; }}
+      .clock-time {{ font-size: 1.15rem; }}
+      .clock-period {{ font-size: 0.4rem; margin-left: 2px; }}
+      .clock-divider {{ width: 18px; margin: 4px 0; }}
+      .clock-date {{ font-size: 0.5rem; }}
       .hero-chips {{ margin-top: 16px; gap: 6px; }}
       .chip {{ padding: 5px 11px; font-size: 0.62rem; }}
       .hero-next {{
@@ -1539,11 +1540,11 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .hero {{ margin-bottom: 44px; }}
       .hero h1 {{ font-size: 1.85rem; }}
       .hero-top {{ gap: 18px; align-items: flex-start; }}
-      .clock {{ padding: 12px 16px; min-width: 110px; border-radius: 14px; }}
-      .clock-time {{ font-size: 1.5rem; }}
-      .clock-period {{ font-size: 0.46rem; margin-left: 3px; }}
-      .clock-divider {{ width: 24px; margin: 7px 0; }}
-      .clock-date {{ font-size: 0.58rem; }}
+      .clock {{ padding: 10px 15px; border-radius: 12px; }}
+      .clock-time {{ font-size: 1.4rem; }}
+      .clock-period {{ font-size: 0.44rem; margin-left: 2px; }}
+      .clock-divider {{ width: 22px; margin: 5px 0; }}
+      .clock-date {{ font-size: 0.55rem; }}
       .hero-chips {{ margin-top: 18px; gap: 7px; }}
       .chip {{ padding: 5px 12px; font-size: 0.65rem; }}
       .hero-next {{ margin-top: 18px; padding: 13px 16px; border-radius: 12px; }}
@@ -1565,10 +1566,10 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .hero {{ margin-bottom: 56px; }}
       .hero h1 {{ font-size: 2.8rem; }}
       .hero-top {{ gap: 28px; }}
-      .clock {{ padding: 16px 24px; min-width: 140px; border-radius: 18px; }}
-      .clock-time {{ font-size: 1.85rem; }}
-      .clock-period {{ font-size: 0.52rem; margin-left: 4px; }}
-      .clock-divider {{ margin: 9px 0; width: 30px; }}
+      .clock {{ padding: 14px 22px; border-radius: 16px; }}
+      .clock-time {{ font-size: 1.8rem; }}
+      .clock-period {{ font-size: 0.5rem; margin-left: 3px; }}
+      .clock-divider {{ margin: 7px 0; width: 26px; }}
       .hero-chips {{ margin-top: 24px; gap: 8px; }}
       .chip {{ padding: 6px 14px; font-size: 0.7rem; }}
       .hero-next {{ padding: 14px 20px; }}
