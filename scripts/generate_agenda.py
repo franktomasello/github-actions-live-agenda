@@ -207,13 +207,13 @@ _RENDER_JS = r"""
       ? '<span class="day-date">' + esc(_fmtLongDate.format(new Date(evts[0].start))) + '</span>'
       : '';
     var tomorrowBlurb = '';
+    var _sunIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M19.07 4.93l-2.83 2.83"/><path d="M1 18h22"/><path d="M5 18a7 7 0 0 1 14 0"/></svg>';
     if (heading === 'Tomorrow' && evts.length > 0 && !evts[0].isAllDay) {
-      tomorrowBlurb = '<div class="tomorrow-starts">Your day starts at <strong>' + fmtTime(evts[0].start) + '</strong></div>';
+      tomorrowBlurb = '<div class="tomorrow-starts">' + _sunIcon + '<span>Your day starts at <strong>' + fmtTime(evts[0].start) + '</strong></span></div>';
     } else if (heading === 'Tomorrow' && evts.length > 0 && evts[0].isAllDay) {
-      // Find first non-all-day event
       for (var ti = 0; ti < evts.length; ti++) {
         if (!evts[ti].isAllDay) {
-          tomorrowBlurb = '<div class="tomorrow-starts">Your day starts at <strong>' + fmtTime(evts[ti].start) + '</strong></div>';
+          tomorrowBlurb = '<div class="tomorrow-starts">' + _sunIcon + '<span>Your day starts at <strong>' + fmtTime(evts[ti].start) + '</strong></span></div>';
           break;
         }
       }
@@ -841,9 +841,17 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
             if heading == "Tomorrow" and count > 0:
                 first_timed = next((e for e in group if not e.is_all_day), None)
                 if first_timed:
+                    _sun_svg = (
+                        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
+                        ' stroke-linecap="round" stroke-linejoin="round">'
+                        '<path d="M12 2v4"/><path d="M4.93 4.93l2.83 2.83"/>'
+                        '<path d="M19.07 4.93l-2.83 2.83"/><path d="M1 18h22"/>'
+                        '<path d="M5 18a7 7 0 0 1 14 0"/></svg>'
+                    )
                     tomorrow_blurb = (
                         f'<div class="tomorrow-starts">'
-                        f"Your day starts at <strong>{_fmt_clock(first_timed.start)}</strong>"
+                        f"{_sun_svg}"
+                        f"<span>Your day starts at <strong>{_fmt_clock(first_timed.start)}</strong></span>"
                         f"</div>"
                     )
 
@@ -1175,15 +1183,28 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       border: 1px solid var(--border);
     }}
     .tomorrow-starts {{
-      font-size: 0.72rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.74rem;
       font-weight: 450;
       color: var(--text-2);
-      padding: 8px 14px;
-      margin-bottom: 14px;
-      background: var(--surface);
+      padding: 10px 16px;
+      margin-bottom: 16px;
+      margin-left: 2px;
+      background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
       border: 1px solid var(--border-2);
+      border-left: 3px solid var(--accent);
       border-radius: 10px;
       letter-spacing: 0.01em;
+      line-height: 1.4;
+    }}
+    .tomorrow-starts svg {{
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+      color: var(--accent);
+      opacity: 0.8;
     }}
     .tomorrow-starts strong {{
       font-weight: 700;

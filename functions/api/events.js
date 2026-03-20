@@ -21,7 +21,9 @@ export async function onRequestGet(context) {
       headers: {
         'User-Agent': 'github-actions-live-agenda/1.0',
         'Accept': 'text/calendar, text/plain, */*',
+        'Cache-Control': 'no-cache',
       },
+      cf: { cacheTtl: 0, cacheEverything: false },
     });
     if (!resp.ok) return json({ error: `ICS fetch failed: HTTP ${resp.status}` }, 502);
     icsText = await resp.text();
