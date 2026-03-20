@@ -46,7 +46,7 @@ export async function onRequestGet(context) {
   return json(
     { events, timezone, generatedAt: new Date().toISOString() },
     200,
-    { 'Cache-Control': 'public, s-maxage=2, stale-while-revalidate=5' },
+    { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=30' },
   );
 }
 
