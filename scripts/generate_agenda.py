@@ -559,7 +559,9 @@ SITE_DIR.mkdir(parents=True, exist_ok=True)
 _WIN = sys.platform == "win32"
 
 
-def fetch_ics(url: str) -> bytes:
+def fetch_ics(url: str, retries: int = 3) -> bytes:
+    import time as _time
+
     req = Request(
         url,
         headers={
@@ -568,13 +570,21 @@ def fetch_ics(url: str) -> bytes:
         },
         method="GET",
     )
-    try:
-        with urlopen(req, timeout=30) as resp:
-            return resp.read()
-    except HTTPError as exc:
-        raise SystemExit(f"Failed to fetch ICS feed: HTTP {exc.code}") from exc
-    except URLError as exc:
-        raise SystemExit(f"Failed to fetch ICS feed: {exc.reason}") from exc
+    for attempt in range(retries):
+        try:
+            with urlopen(req, timeout=30) as resp:
+                return resp.read()
+        except (HTTPError, URLError) as exc:
+            code = getattr(exc, "code", None)
+            reason = getattr(exc, "reason", exc)
+            if attempt < retries - 1:
+                wait = 2 ** attempt * 3  # 3s, 6s, 12s
+                print(f"ICS fetch attempt {attempt + 1} failed ({code or reason}), retrying in {wait}s...")
+                _time.sleep(wait)
+            else:
+                label = f"HTTP {code}" if code else str(reason)
+                raise SystemExit(f"Failed to fetch ICS feed after {retries} attempts: {label}") from exc
+    return b""  # unreachable
 
 
 def ensure_dt(value: date | datetime, tz: ZoneInfo) -> tuple[datetime, bool]:
