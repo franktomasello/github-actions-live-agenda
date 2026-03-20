@@ -24,7 +24,7 @@
 
 ```mermaid
 flowchart TB
-    A["Outlook / Google / Reclaim<br/>Calendar"] -- "ICS feed" --> B
+    A["Outlook / Google Calendar"] -- "ICS feed" --> B
 
     subgraph B ["Cloudflare Pages"]
         direction TB
