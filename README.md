@@ -23,36 +23,36 @@
 ## Architecture
 
 ```
-┌─────────────────────────────┐
-│  Outlook / Google / Reclaim │
-│        Calendar             │
-└─────────────┬───────────────┘
-              │ ICS feed
-              ▼
-┌─────────────────────────────────────────────────┐
-│              Cloudflare Pages                   │
-│                                                 │
-│   ┌─────────────────┐   ┌───────────────────┐   │
-│   │ generate_agenda  │   │   /api/events     │   │
-│   │     .py          │   │   (Pages Fn)      │   │
-│   │                  │   │                   │   │
-│   │ Build-time HTML  │   │ Live ICS → JSON   │   │
-│   │ shell + assets   │   │ 30s edge cache    │   │
-│   └────────┬─────────┘   └────────┬──────────┘   │
-│            │                      │              │
-│            ▼                      ▼              │
-│   ┌──────────────────────────────────────────┐   │
-│   │           Client-side JS                 │   │
-│   │                                          │   │
-│   │  • Polls /api/events every 30s           │   │
-│   │  • 1s tick for countdowns & progress     │   │
-│   │  • Signature diffing — no wasted renders │   │
-│   │  • Instant refresh on tab focus          │   │
-│   └──────────────────────────────────────────┘   │
-│                      │                           │
-│              Cloudflare Access                   │
-│            (email-gated auth)                    │
-└─────────────────────────────────────────────────┘
+┌───────────────────────────────┐
+│  Outlook / Google / Reclaim   │
+│           Calendar            │
+└───────────────┬───────────────┘
+                │ ICS feed
+                ▼
+┌───────────────────────────────────────────────────┐
+│                 Cloudflare Pages                  │
+│                                                   │
+│   ┌───────────────────┐   ┌───────────────────┐   │
+│   │  generate_agenda   │   │   /api/events     │   │
+│   │       .py          │   │   (Pages Fn)      │   │
+│   │                    │   │                   │   │
+│   │  Build-time HTML   │   │  Live ICS → JSON  │   │
+│   │  shell + assets    │   │  30s edge cache   │   │
+│   └─────────┬─────────┘   └─────────┬─────────┘   │
+│             │                       │              │
+│             ▼                       ▼              │
+│   ┌─────────────────────────────────────────────┐  │
+│   │              Client-side JS                 │  │
+│   │                                             │  │
+│   │  • Polls /api/events every 30s              │  │
+│   │  • 1s tick for countdowns & progress        │  │
+│   │  • Signature diffing — no wasted renders    │  │
+│   │  • Instant refresh on tab focus             │  │
+│   └─────────────────────────────────────────────┘  │
+│                       │                            │
+│               Cloudflare Access                    │
+│             (email-gated auth)                     │
+└───────────────────────────────────────────────────┘
 ```
 
 <br>
