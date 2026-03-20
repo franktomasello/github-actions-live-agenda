@@ -554,40 +554,42 @@ _RENDER_JS = r"""
       var textEl = document.getElementById('tgif-text');
       var confettiEl = document.getElementById('tgif-confetti');
       if (textEl) {
-        var phrase = 'THANK GOD IT\'S FRIDAY!';
+        var phrase = 'THANK GOD IT\u2019S FRIDAY!';
         var html = '';
         for (var i = 0; i < phrase.length; i++) {
           if (phrase[i] === ' ') {
-            html += '<span style="width:6px;display:inline-block"></span>';
+            html += '<span class="tgif-space"></span>';
           } else {
-            var delay = (i * 0.08);
-            html += '<span class="tgif-letter" style="animation-delay:' + delay + 's,' + delay + 's">' + phrase[i] + '</span>';
+            var delay = (i * 0.06);
+            html += '<span class="tgif-letter" style="animation-delay:' + delay + 's,' + (delay + 0.3) + 's">' + phrase[i] + '</span>';
           }
         }
         textEl.innerHTML = html;
       }
       if (confettiEl) {
-        var colors = ['#ff9f0a','#ff375f','#af52de','#5e5ce6','#007aff','#30d158','#ffd60a'];
-        for (var c = 0; c < 30; c++) {
+        var colors = ['#ff9f0a','#ff375f','#af52de','#5e5ce6','#007aff','#30d158','#ffd60a','#ff6482','#64d2ff','#bf5af2'];
+        var shapes = ['circle','square','rect','star'];
+        for (var c = 0; c < 50; c++) {
           var p = document.createElement('span');
-          p.className = 'tgif-particle';
+          var shape = shapes[Math.floor(Math.random() * shapes.length)];
+          p.className = 'tgif-particle tgif-p-' + shape;
           var left = Math.random() * 100;
-          var dur = 2 + Math.random() * 3;
-          var del = Math.random() * 4;
-          var size = 4 + Math.random() * 4;
+          var dur = 3 + Math.random() * 5;
+          var del = Math.random() * 6;
+          var size = 3 + Math.random() * 5;
           var color = colors[Math.floor(Math.random() * colors.length)];
-          var rot = Math.random() * 360;
-          p.style.cssText = 'left:' + left + '%;width:' + size + 'px;height:' + size
-            + 'px;background:' + color + ';animation-duration:' + dur
-            + 's;animation-delay:' + del + 's;transform:rotate(' + rot + 'deg);border-radius:'
-            + (Math.random() > 0.5 ? '50%' : '1px');
+          var drift = -30 + Math.random() * 60;
+          p.style.cssText = 'left:' + left + '%;width:' + size + 'px;height:'
+            + (shape === 'rect' ? size * 2.5 : size) + 'px;background:' + color
+            + ';animation-duration:' + dur + 's;animation-delay:' + del
+            + 's;--drift:' + drift + 'px;opacity:0';
           confettiEl.appendChild(p);
         }
       }
       _tgifInitialized = true;
     }
 
-    banner.style.display = 'block';
+    banner.style.display = 'flex';
     banner.setAttribute('aria-hidden', 'false');
   }
 })();
@@ -1804,91 +1806,279 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .progress-fill, .progress-glow {{ transition: none; }}
       .progress-glow {{ box-shadow: none; }}
       .clock-time .clock-sep {{ animation: none; opacity: 1; }}
-      .tgif-banner {{ animation: none !important; }}
+      .tgif-banner, .tgif-banner::before, .tgif-banner::after {{ animation: none !important; }}
       .tgif-banner .tgif-letter {{ animation: none !important; }}
+      .tgif-emoji {{ animation: none !important; }}
+      .tgif-sub {{ animation: none !important; opacity: 0.6 !important; }}
+      .tgif-glow-border {{ animation: none !important; }}
       .tgif-confetti {{ display: none !important; }}
     }}
 
     /* ── TGIF Friday Banner ── */
     .tgif-banner {{
       display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
       text-align: center;
-      margin: -8px 0 28px;
-      padding: 18px 20px 14px;
-      border-radius: 16px;
-      background: linear-gradient(135deg,
-        rgba(255,159,10,0.12) 0%,
-        rgba(94,92,230,0.12) 50%,
-        rgba(175,82,222,0.12) 100%);
-      border: 1px solid rgba(255,159,10,0.2);
+      margin: -8px 0 32px;
+      padding: 36px 28px 30px;
+      border-radius: var(--r2);
       position: relative;
       overflow: hidden;
-      animation: tgif-glow 3s ease-in-out infinite;
+      isolation: isolate;
+      background: var(--surface);
+      border: 1px solid var(--border-2);
+      box-shadow: var(--card-shadow);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
     }}
+
+    /* Animated aurora gradient behind the card */
+    .tgif-banner::before {{
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        135deg,
+        rgba(255,100,130,0.10) 0%,
+        rgba(175,82,222,0.12) 20%,
+        rgba(94,92,230,0.10) 40%,
+        rgba(0,122,255,0.08) 60%,
+        rgba(48,209,88,0.10) 80%,
+        rgba(255,214,10,0.08) 100%
+      );
+      background-size: 300% 300%;
+      animation: tgif-aurora 8s ease-in-out infinite;
+      z-index: -2;
+    }}
+
+    /* Shimmer sweep overlay */
+    .tgif-banner::after {{
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        105deg,
+        transparent 40%,
+        rgba(255,255,255,0.04) 45%,
+        rgba(255,255,255,0.08) 50%,
+        rgba(255,255,255,0.04) 55%,
+        transparent 60%
+      );
+      background-size: 200% 100%;
+      animation: tgif-shimmer 6s ease-in-out infinite;
+      z-index: -1;
+    }}
+
     [data-theme="light"] .tgif-banner {{
-      background: linear-gradient(135deg,
-        rgba(255,159,10,0.08) 0%,
-        rgba(94,92,230,0.08) 50%,
-        rgba(175,82,222,0.08) 100%);
-      border-color: rgba(255,159,10,0.15);
+      box-shadow: 0 2px 12px rgba(0,0,0,.04), 0 8px 32px rgba(175,82,222,.06);
     }}
-    @keyframes tgif-glow {{
-      0%, 100% {{ border-color: rgba(255,159,10,0.2); }}
-      33% {{ border-color: rgba(94,92,230,0.3); }}
-      66% {{ border-color: rgba(175,82,222,0.3); }}
+    [data-theme="light"] .tgif-banner::before {{
+      background: linear-gradient(
+        135deg,
+        rgba(255,100,130,0.06) 0%,
+        rgba(175,82,222,0.07) 20%,
+        rgba(94,92,230,0.06) 40%,
+        rgba(0,122,255,0.05) 60%,
+        rgba(48,209,88,0.06) 80%,
+        rgba(255,214,10,0.05) 100%
+      );
+      background-size: 300% 300%;
     }}
+    [data-theme="light"] .tgif-banner::after {{
+      background: linear-gradient(
+        105deg,
+        transparent 40%,
+        rgba(0,0,0,0.01) 45%,
+        rgba(0,0,0,0.02) 50%,
+        rgba(0,0,0,0.01) 55%,
+        transparent 60%
+      );
+      background-size: 200% 100%;
+    }}
+
+    @keyframes tgif-aurora {{
+      0%, 100% {{ background-position: 0% 50%; }}
+      25% {{ background-position: 100% 25%; }}
+      50% {{ background-position: 50% 100%; }}
+      75% {{ background-position: 0% 75%; }}
+    }}
+    @keyframes tgif-shimmer {{
+      0%, 100% {{ background-position: 200% 0; }}
+      50% {{ background-position: -100% 0; }}
+    }}
+
+    /* Glowing border animation */
+    .tgif-glow-border {{
+      position: absolute;
+      inset: -1px;
+      border-radius: inherit;
+      padding: 1px;
+      background: linear-gradient(
+        var(--tgif-border-angle, 0deg),
+        rgba(255,159,10,0.3),
+        rgba(255,55,95,0.3),
+        rgba(175,82,222,0.3),
+        rgba(94,92,230,0.3),
+        rgba(0,122,255,0.3),
+        rgba(48,209,88,0.3),
+        rgba(255,214,10,0.3)
+      );
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      animation: tgif-border-spin 4s linear infinite;
+      z-index: 0;
+      pointer-events: none;
+    }}
+    [data-theme="light"] .tgif-glow-border {{
+      background: linear-gradient(
+        var(--tgif-border-angle, 0deg),
+        rgba(255,159,10,0.2),
+        rgba(255,55,95,0.2),
+        rgba(175,82,222,0.2),
+        rgba(94,92,230,0.2),
+        rgba(0,122,255,0.2),
+        rgba(48,209,88,0.2),
+        rgba(255,214,10,0.2)
+      );
+    }}
+    @keyframes tgif-border-spin {{
+      to {{ --tgif-border-angle: 360deg; }}
+    }}
+    @property --tgif-border-angle {{
+      syntax: '<angle>';
+      initial-value: 0deg;
+      inherits: false;
+    }}
+
+    .tgif-emoji {{
+      font-size: 2.4rem;
+      margin-bottom: 8px;
+      animation: tgif-bounce 2s ease-in-out infinite;
+      filter: drop-shadow(0 2px 8px rgba(255,159,10,.3));
+    }}
+    @keyframes tgif-bounce {{
+      0%, 100% {{ transform: translateY(0) scale(1); }}
+      25% {{ transform: translateY(-6px) scale(1.05); }}
+      50% {{ transform: translateY(0) scale(1); }}
+      75% {{ transform: translateY(-3px) scale(1.02); }}
+    }}
+
     .tgif-text {{
       display: inline-flex;
-      gap: 1px;
-      font-size: clamp(1.2rem, 3.5vw, 1.6rem);
-      font-weight: 800;
-      letter-spacing: 0.04em;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 2px;
+      font-size: clamp(1.3rem, 4vw, 1.8rem);
+      font-weight: 850;
+      letter-spacing: 0.03em;
+      line-height: 1.2;
+      position: relative;
+      z-index: 1;
+    }}
+    .tgif-space {{
+      width: 8px;
+      display: inline-block;
     }}
     .tgif-letter {{
       display: inline-block;
-      animation: tgif-wave 2.5s ease-in-out infinite;
-      background: linear-gradient(135deg, #ff9f0a, #ff375f, #af52de, #5e5ce6, #007aff);
-      background-size: 200% 200%;
+      background: linear-gradient(135deg, #ff9f0a, #ff375f, #af52de, #5e5ce6, #007aff, #30d158);
+      background-size: 300% 300%;
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
-      animation: tgif-wave 2.5s ease-in-out infinite, tgif-gradient 4s ease infinite;
+      animation: tgif-wave 3s ease-in-out infinite, tgif-gradient 6s ease infinite;
+      filter: drop-shadow(0 0 12px rgba(175,82,222,.15));
+    }}
+    [data-theme="light"] .tgif-letter {{
+      background: linear-gradient(135deg, #e08600, #e02050, #9030c0, #4040d0, #0060e0, #20a040);
+      background-size: 300% 300%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 8px rgba(175,82,222,.1));
     }}
     @keyframes tgif-wave {{
-      0%, 100% {{ transform: translateY(0); }}
-      50% {{ transform: translateY(-4px); }}
+      0%, 100% {{ transform: translateY(0) rotate(0deg); }}
+      30% {{ transform: translateY(-5px) rotate(-1deg); }}
+      60% {{ transform: translateY(1px) rotate(0.5deg); }}
     }}
     @keyframes tgif-gradient {{
       0%, 100% {{ background-position: 0% 50%; }}
-      50% {{ background-position: 100% 50%; }}
+      33% {{ background-position: 100% 0%; }}
+      66% {{ background-position: 50% 100%; }}
     }}
+
     .tgif-sub {{
       display: block;
-      margin-top: 4px;
-      font-size: 0.8rem;
-      font-weight: 500;
-      letter-spacing: 0.06em;
-      opacity: 0.5;
+      margin-top: 10px;
+      font-size: 0.82rem;
+      font-weight: 520;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-2);
+      position: relative;
+      z-index: 1;
+      opacity: 0;
+      animation: tgif-sub-in 0.8s ease-out 1.6s forwards;
     }}
+    @keyframes tgif-sub-in {{
+      from {{ opacity: 0; transform: translateY(8px); }}
+      to {{ opacity: 0.6; transform: translateY(0); }}
+    }}
+
+    /* Confetti system */
     .tgif-confetti {{
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
       pointer-events: none;
       overflow: hidden;
+      z-index: 0;
     }}
     .tgif-particle {{
       position: absolute;
-      width: 6px;
-      height: 6px;
-      border-radius: 1px;
+      top: -10px;
       opacity: 0;
       animation: tgif-fall linear infinite;
     }}
+    .tgif-p-circle {{ border-radius: 50%; }}
+    .tgif-p-square {{ border-radius: 1px; }}
+    .tgif-p-rect {{ border-radius: 1px; }}
+    .tgif-p-star {{
+      background: transparent !important;
+      border-left: 3px solid transparent;
+      border-right: 3px solid transparent;
+      border-bottom: 6px solid currentColor;
+    }}
     @keyframes tgif-fall {{
-      0% {{ transform: translateY(-10px) rotate(0deg); opacity: 0; }}
-      10% {{ opacity: 0.7; }}
-      90% {{ opacity: 0.7; }}
-      100% {{ transform: translateY(80px) rotate(720deg); opacity: 0; }}
+      0% {{ transform: translateY(-10px) translateX(0) rotate(0deg); opacity: 0; }}
+      8% {{ opacity: 0.8; }}
+      50% {{ opacity: 0.6; }}
+      90% {{ opacity: 0.3; }}
+      100% {{ transform: translateY(120px) translateX(var(--drift, 0px)) rotate(720deg); opacity: 0; }}
+    }}
+
+    @media (max-width: 480px) {{
+      .tgif-banner {{ padding: 28px 18px 22px; margin: -4px 0 24px; }}
+      .tgif-emoji {{ font-size: 2rem; }}
+      .tgif-text {{ font-size: 1.1rem; gap: 1px; }}
+      .tgif-space {{ width: 5px; }}
+      .tgif-sub {{ font-size: 0.68rem; margin-top: 8px; }}
+    }}
+    @media (min-width: 481px) and (max-width: 700px) {{
+      .tgif-banner {{ padding: 32px 24px 26px; }}
+      .tgif-emoji {{ font-size: 2.2rem; }}
+      .tgif-text {{ font-size: 1.4rem; }}
+      .tgif-sub {{ font-size: 0.75rem; }}
+    }}
+    @media (min-width: 900px) {{
+      .tgif-banner {{ padding: 40px 32px 34px; margin: -8px 0 36px; }}
+      .tgif-emoji {{ font-size: 2.8rem; }}
+      .tgif-text {{ font-size: 1.9rem; }}
+      .tgif-sub {{ font-size: 0.85rem; margin-top: 12px; }}
     }}
   </style>
 </head>
@@ -1909,7 +2099,9 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       <div id="hero-next-wrap">{hero_next}</div>
     </div>
     <div class="tgif-banner" id="tgif-banner" aria-hidden="true">
+      <div class="tgif-glow-border"></div>
       <div class="tgif-confetti" id="tgif-confetti"></div>
+      <div class="tgif-emoji">🎉</div>
       <span class="tgif-text" id="tgif-text"></span>
       <span class="tgif-sub">You made it through the week</span>
     </div>
