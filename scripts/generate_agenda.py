@@ -144,6 +144,7 @@ _RENDER_JS = r"""
 
   // ── Card & section rendering ────────────────────────────────────────────────
   var _isFirstRender = true;
+  var _liveFetchDone = false;
 
   function renderCard(ev, isLast, delay, now, animate) {
     var rel       = timeUntil(ev.start, ev.end, ev.isAllDay, now);
@@ -257,9 +258,15 @@ _RENDER_JS = r"""
 
     // Render sections
     var html = '', idx = 0;
-    if (order.length === 0) {
+    var EMPTY_ICON = '<div class="empty-icon"><svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/></svg></div>';
+    if (order.length === 0 && !_liveFetchDone) {
+      html = '<section class="day-group fade-in"><div class="empty-state loading-state">'
+        + EMPTY_ICON
+        + '<h2>Loading&hellip;</h2><p>Checking your calendar</p>'
+        + '</div></section>';
+    } else if (order.length === 0) {
       html = '<section class="day-group' + (animate ? ' fade-in' : '') + '"><div class="empty-state">'
-        + '<div class="empty-icon"><svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/></svg></div>'
+        + EMPTY_ICON
         + '<h2>All clear</h2><p>Nothing on the books for the next ' + WINDOW_HOURS + ' hours.</p>'
         + '</div></section>';
     } else {
@@ -502,11 +509,17 @@ _RENDER_JS = r"""
       })
       .then(function (data) {
         var events = data.events || [];
+        var needsRender = !_liveFetchDone;
+        _liveFetchDone = true;
         var s = sig(events);
         currentData = events;
-        if (s !== currentSig) { currentSig = s; renderAll(events); }
+        if (s !== currentSig || needsRender) { currentSig = s; renderAll(events); }
       })
       .catch(function (err) {
+        if (!_liveFetchDone) {
+          _liveFetchDone = true;
+          renderAll(currentData);
+        }
         console.warn('[agenda] fetch failed:', err.message || err);
       });
   }
@@ -818,12 +831,12 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     if not grouped:
         sections.append(
             '<section class="day-group fade-in">'
-            '<div class="empty-state">'
+            '<div class="empty-state loading-state">'
             '<div class="empty-icon">'
             '<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/></svg>'
             "</div>"
-            "<h2>All clear</h2>"
-            f"<p>Nothing on the books for the next {WINDOW_HOURS} hours.</p>"
+            "<h2>Loading&hellip;</h2>"
+            "<p>Checking your calendar</p>"
             "</div></section>"
         )
     else:
@@ -1049,6 +1062,26 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     @keyframes pulse-glow {{
       0%,100% {{ box-shadow: 0 0 0 0 rgba(52,199,89,.35); }}
       50%     {{ box-shadow: 0 0 0 7px rgba(52,199,89,0); }}
+    }}
+    @keyframes loading-breathe {{
+      0%,100% {{ opacity: .4; transform: scale(1); }}
+      50%     {{ opacity: .8; transform: scale(1.08); }}
+    }}
+    .loading-state .empty-icon {{
+      animation: loading-breathe 2s ease-in-out infinite;
+      opacity: 1;
+    }}
+    .loading-state h2 {{
+      background: linear-gradient(90deg, var(--text-2), var(--accent), var(--text-2));
+      background-size: 200% 100%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: loading-shimmer 2s ease-in-out infinite;
+    }}
+    @keyframes loading-shimmer {{
+      0%   {{ background-position: 100% 50%; }}
+      100% {{ background-position: -100% 50%; }}
     }}
 
     /* ── Base ── */
@@ -1800,6 +1833,8 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     @media (prefers-reduced-motion: reduce) {{
       .fade-in {{ animation: none; opacity: 1; }}
       .pulse {{ animation: none; }}
+      .loading-state .empty-icon {{ animation: none; opacity: .4; }}
+      .loading-state h2 {{ animation: none; -webkit-text-fill-color: unset; background: none; }}
       .card {{ transition: none; }}
       .dot {{ transition: none; }}
       .theme-toggle, .theme-toggle svg {{ transition: none; }}
