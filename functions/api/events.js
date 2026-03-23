@@ -2,11 +2,7 @@
  * Cloudflare Pages Function — /api/events
  *
  * Fetches the ICS feed on each request and returns parsed events as JSON.
- * Short edge cache (2s) prevents hammering the ICS source on rapid polls.
- *
- * NOTE: Outlook's published ICS feeds have an inherent 15-30 min propagation
- * delay on Microsoft's side. Changes to the calendar will not appear instantly
- * in the ICS feed regardless of cache settings here.
+ * Minimal edge cache (2s) prevents duplicate requests while keeping data fresh.
  */
 export async function onRequestGet(context) {
   const { env } = context;
@@ -22,7 +18,7 @@ export async function onRequestGet(context) {
   let icsText;
   try {
     const resp = await fetch(icsUrl, {
-      cache: 'no-store',
+      cf: { cacheTtl: 0 },
       headers: {
         'User-Agent': 'github-actions-live-agenda/1.0',
         'Accept': 'text/calendar, text/plain, */*',
@@ -46,7 +42,7 @@ export async function onRequestGet(context) {
   return json(
     { events, timezone, generatedAt: new Date().toISOString() },
     200,
-    { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=30' },
+    { 'Cache-Control': 'public, s-maxage=2, stale-while-revalidate=5' },
   );
 }
 

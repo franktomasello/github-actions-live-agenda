@@ -21,7 +21,7 @@ _RENDER_JS = r"""
   'use strict';
   var TZ           = window.__AGENDA_TZ__;
   var WINDOW_HOURS = window.__AGENDA_WINDOW_HOURS__;
-  var POLL_MS      = 30000;
+  var POLL_MS      = 15000;
   var TICK_MS      = 1000;
 
   var currentSig   = null;

@@ -44,7 +44,7 @@ flowchart TB
 
 | | Feature | Detail |
 |---|---|---|
-| **⚡** | **Live data** | Polls every 30s via edge function — no rebuild needed |
+| **⚡** | **Live data** | Polls every 15s via edge function — no rebuild needed |
 | **🕐** | **Real-time UI** | 1s tick updates countdowns, progress bars, and clock |
 | **📅** | **Timeline view** | Events grouped by day with color-coded accent bars |
 | **🔴** | **Live indicators** | Pulsing dot + "Now" / "In progress" badges |
@@ -53,7 +53,7 @@ flowchart TB
 | **📱** | **Responsive** | Optimized for desktop, tablet, and mobile |
 | **👁** | **Tab-aware** | Fetches fresh data the moment you switch back |
 | **♿** | **Accessible** | `prefers-reduced-motion`, semantic HTML, print styles |
-| **🌐** | **Edge-cached** | 30s `s-maxage` + stale-while-revalidate on API |
+| **🌐** | **Edge-cached** | 2s `s-maxage` + stale-while-revalidate on API |
 
 <br>
 
