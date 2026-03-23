@@ -1,28 +1,60 @@
 /**
  * Cloudflare Pages Function — /api/events
  *
- * Fetches the ICS feed on each request and returns parsed events as JSON.
- * Short edge cache (2s) prevents hammering the ICS source on rapid polls.
+ * Two data-source modes (in priority order):
  *
- * NOTE: Outlook's published ICS feeds have an inherent 15-30 min propagation
- * delay on Microsoft's side. Changes to the calendar will not appear instantly
- * in the ICS feed regardless of cache settings here.
+ * 1. Microsoft Graph API — real-time, reflects calendar changes within seconds.
+ *    Requires: MS_CLIENT_ID, MS_CLIENT_SECRET, MS_TENANT_ID, MS_REFRESH_TOKEN
+ *    Optional: MS_USER_EMAIL (uses client-credentials flow instead of refresh-token)
+ *
+ * 2. ICS feed — fallback; Outlook published ICS feeds have a 15–30 min delay.
+ *    Requires: ICS_URL
  */
+
+// In-memory access-token cache (survives across requests within one CF isolate)
+let _accessToken = null;
+let _tokenExpiry = 0;
+
 export async function onRequestGet(context) {
   const { env } = context;
-  const icsUrl = env.ICS_URL;
-  if (!icsUrl) {
-    return json({ error: 'ICS_URL not configured' }, 500);
-  }
 
   const timezone  = env.AGENDA_TIMEZONE || 'America/Los_Angeles';
   const windowHrs = parseInt(env.WINDOW_HOURS || '48', 10);
   const maxEvents = parseInt(env.MAX_EVENTS  || '40',  10);
 
+  // ── 1. Prefer Microsoft Graph API for real-time data ───────────────────────
+  const graphReady = env.MS_CLIENT_ID && env.MS_CLIENT_SECRET && env.MS_TENANT_ID
+    && (env.MS_REFRESH_TOKEN || env.MS_USER_EMAIL);
+
+  if (graphReady) {
+    try {
+      const events = await fetchFromGraph(env, timezone, windowHrs, maxEvents);
+      return json(
+        { events, timezone, source: 'graph', generatedAt: new Date().toISOString() },
+        200,
+        { 'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=10' },
+      );
+    } catch (err) {
+      console.error('[graph] ' + err.message);
+      if (!env.ICS_URL) {
+        return json({ error: 'Graph API error: ' + err.message }, 502);
+      }
+      // Graph failed but ICS_URL is available — fall through
+    }
+  }
+
+  // ── 2. Fall back to ICS feed ───────────────────────────────────────────────
+  const icsUrl = env.ICS_URL;
+  if (!icsUrl) {
+    return json({
+      error: 'No data source configured. Set MS_CLIENT_ID + MS_CLIENT_SECRET + MS_TENANT_ID + MS_REFRESH_TOKEN for real-time Graph API, or ICS_URL for ICS feed.',
+    }, 500);
+  }
+
   let icsText;
   try {
     const resp = await fetch(icsUrl, {
-      cache: 'no-store',
+      cf: { cacheTtl: 0 },
       headers: {
         'User-Agent': 'github-actions-live-agenda/1.0',
         'Accept': 'text/calendar, text/plain, */*',
@@ -30,21 +62,21 @@ export async function onRequestGet(context) {
         'Pragma': 'no-cache',
       },
     });
-    if (!resp.ok) return json({ error: `ICS fetch failed: HTTP ${resp.status}` }, 502);
+    if (!resp.ok) return json({ error: 'ICS fetch failed: HTTP ' + resp.status }, 502);
     icsText = await resp.text();
   } catch (err) {
-    return json({ error: `ICS fetch error: ${err.message}` }, 502);
+    return json({ error: 'ICS fetch error: ' + err.message }, 502);
   }
 
   let events;
   try {
     events = parseICS(icsText, timezone, windowHrs, maxEvents);
   } catch (err) {
-    return json({ error: `ICS parse error: ${err.message}`, icsLength: icsText.length }, 500);
+    return json({ error: 'ICS parse error: ' + err.message, icsLength: icsText.length }, 500);
   }
 
   return json(
-    { events, timezone, generatedAt: new Date().toISOString() },
+    { events, timezone, source: 'ics', generatedAt: new Date().toISOString() },
     200,
     { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=30' },
   );
@@ -60,6 +92,110 @@ function json(body, status = 200, extraHeaders = {}) {
       ...extraHeaders,
     },
   });
+}
+
+// ── Microsoft Graph API ──────────────────────────────────────────────────────
+
+async function getAccessToken(env) {
+  // Return cached token if still valid (with 5-min safety margin)
+  if (_accessToken && Date.now() < _tokenExpiry - 300_000) {
+    return _accessToken;
+  }
+
+  const url = `https://login.microsoftonline.com/${env.MS_TENANT_ID}/oauth2/v2.0/token`;
+  const body = new URLSearchParams({
+    client_id:     env.MS_CLIENT_ID,
+    client_secret: env.MS_CLIENT_SECRET,
+  });
+
+  if (env.MS_REFRESH_TOKEN) {
+    // Delegated flow: refresh token → access token
+    body.set('grant_type', 'refresh_token');
+    body.set('refresh_token', env.MS_REFRESH_TOKEN);
+    body.set('scope', 'https://graph.microsoft.com/Calendars.Read offline_access');
+  } else {
+    // Client credentials flow: app-only token (requires MS_USER_EMAIL)
+    body.set('grant_type', 'client_credentials');
+    body.set('scope', 'https://graph.microsoft.com/.default');
+  }
+
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error('Token request failed (' + resp.status + '): ' + text);
+  }
+
+  const data = await resp.json();
+  _accessToken = data.access_token;
+  _tokenExpiry = Date.now() + (data.expires_in || 3600) * 1000;
+  return _accessToken;
+}
+
+async function fetchFromGraph(env, timezone, windowHours, maxEvents) {
+  const token = await getAccessToken(env);
+
+  const now       = new Date();
+  const windowEnd = new Date(now.getTime() + windowHours * 3_600_000);
+
+  // /me for delegated (refresh-token) flow, /users/{email} for client-credentials
+  const basePath = env.MS_REFRESH_TOKEN
+    ? '/me'
+    : '/users/' + encodeURIComponent(env.MS_USER_EMAIL);
+
+  const params = new URLSearchParams({
+    startDateTime: now.toISOString(),
+    endDateTime:   windowEnd.toISOString(),
+    $top:          String(maxEvents),
+    $select:       'subject,start,end,location,bodyPreview,isCancelled,isAllDay',
+    $orderby:      'start/dateTime',
+  });
+
+  const resp = await fetch(
+    'https://graph.microsoft.com/v1.0' + basePath + '/calendarView?' + params,
+    {
+      headers: {
+        Authorization: 'Bearer ' + token,
+        Prefer: 'outlook.timezone="UTC"',
+      },
+    },
+  );
+
+  if (!resp.ok) {
+    if (resp.status === 401) { _accessToken = null; _tokenExpiry = 0; }
+    const text = await resp.text();
+    throw new Error('Graph calendarView failed (' + resp.status + '): ' + text);
+  }
+
+  const data   = await resp.json();
+  const events = [];
+
+  for (const ev of (data.value || [])) {
+    if (ev.isCancelled) continue;
+
+    const startRaw = ev.start?.dateTime;
+    const endRaw   = ev.end?.dateTime;
+    if (!startRaw || !endRaw) continue;
+
+    // Graph returns datetime without trailing Z when Prefer: outlook.timezone="UTC"
+    const start = new Date(startRaw.endsWith('Z') ? startRaw : startRaw + 'Z');
+    const end   = new Date(endRaw.endsWith('Z')   ? endRaw   : endRaw + 'Z');
+
+    events.push({
+      title:       ev.subject || 'Untitled',
+      start:       start.toISOString(),
+      end:         end.toISOString(),
+      location:    ev.location?.displayName || '',
+      description: ev.bodyPreview || '',
+      isAllDay:    ev.isAllDay || false,
+    });
+  }
+
+  return events;
 }
 
 // ── Timezone conversion ──────────────────────────────────────────────────────
