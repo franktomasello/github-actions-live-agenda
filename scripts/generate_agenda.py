@@ -695,20 +695,19 @@ _RENDER_JS = r"""
     ghost.style.visibility = 'hidden';
 
     var vw = window.innerWidth, vh = window.innerHeight;
-    var diagLen = Math.sqrt(vw * vw + vh * vh);
 
-    // Free-flight waypoints (~60% of path)
+    // ── Catmull-Rom spline for organic ghost flight ──────────────────────
     var pts = [
-      { x: startX,         y: startY         },
-      { x: vw * 0.65,      y: vh * 0.10      },
-      { x: vw * 0.82,      y: vh * 0.30      },
-      { x: vw * 0.60,      y: vh * 0.50      },
-      { x: vw * 0.25,      y: vh * 0.28      },
-      { x: vw * 0.12,      y: vh * 0.58      },
-      { x: vw * 0.40,      y: vh * 0.18      },
+      {{ x: startX,    y: startY    }},
+      {{ x: vw * 0.70, y: vh * 0.08 }},
+      {{ x: vw * 0.85, y: vh * 0.35 }},
+      {{ x: vw * 0.55, y: vh * 0.52 }},
+      {{ x: vw * 0.20, y: vh * 0.25 }},
+      {{ x: vw * 0.10, y: vh * 0.55 }},
+      {{ x: vw * 0.45, y: vh * 0.15 }},
     ];
 
-    function catmullRom(p0, p1, p2, p3, t) {
+    function catmullRom(p0, p1, p2, p3, t) {{
       var t2 = t * t, t3 = t2 * t;
       return 0.5 * (
         (2 * p1) +
@@ -716,226 +715,253 @@ _RENDER_JS = r"""
         (2*p0 - 5*p1 + 4*p2 - p3) * t2 +
         (-p0 + 3*p1 - 3*p2 + p3) * t3
       );
-    }
+    }}
 
-    function samplePath(t) {
+    function samplePath(t) {{
       var n = pts.length - 1;
-      var segment = t * n;
-      var i = Math.min(Math.floor(segment), n - 1);
-      var lt = segment - i;
+      var seg = t * n;
+      var i = Math.min(Math.floor(seg), n - 1);
+      var lt = seg - i;
       var p0 = pts[Math.max(i - 1, 0)];
       var p1 = pts[i];
       var p2 = pts[Math.min(i + 1, n)];
       var p3 = pts[Math.min(i + 2, n)];
-      return {
+      return {{
         x: catmullRom(p0.x, p1.x, p2.x, p3.x, lt),
         y: catmullRom(p0.y, p1.y, p2.y, p3.y, lt),
-      };
-    }
+      }};
+    }}
 
-    // 13 s total: free(0-0.46) | capture(0.46-0.65) | break-free(0.65-0.81) | aftermath(0.81-1)
-    var FLIGHT_MS = 13000;
+    // ── Timing: 12s total ────────────────────────────────────────────────
+    // Phase 1  Ghost flight:   0.000 – 0.417  (0–5s)
+    // Phase 2  Buster enters:  0.208 – 0.500  (2.5–6s)
+    // Phase 3  Beam + capture: 0.500 – 0.667  (6–8s)
+    // Phase 4  Break free:     0.667 – 0.833  (8–10s)
+    // Phase 5  Aftermath:      0.833 – 1.000  (10–12s)
+    var FLIGHT_MS = 12000;
     var startTime = performance.now();
-    var prevX = startX, prevY = startY;
+    var prevGX = startX, prevGY = startY;
 
-    // Buster state
-    var busterX = vw + 40, busterY = vh * 0.85;
-    var busterPrevX = busterX, busterPrevY = busterY;
+    // Buster state — starts off-screen bottom-right
+    var busterX = vw + 50, busterY = vh * 0.80;
     var busterActive = false;
 
-    // Snapshots at phase transitions
-    var snapGhostX = startX, snapGhostY = startY;
-    var snapBusterX = vw + 40, snapBusterY = vh * 0.85;
-    var captureSnapped = false;
+    // Ghost spring-physics velocity (used during capture phase)
+    var ghostVelX = 0, ghostVelY = 0;
+    var ghostSpringX = 0, ghostSpringY = 0;
+    var captureStarted = false;
+
+    // Snapshot positions at phase boundaries
     var packX = 0, packY = 0;
     var burstFired = false;
-    var spiralAngle = 0;
 
-    function clampVW(x) { return Math.max(vw * 0.05, Math.min(vw * 0.95, x)); }
-    function clampVH(y) { return Math.max(vh * 0.05, Math.min(vh * 0.95, y)); }
+    function clampX(x) {{ return Math.max(vw * 0.04, Math.min(vw * 0.96, x)); }}
+    function clampY(y) {{ return Math.max(vh * 0.04, Math.min(vh * 0.96, y)); }}
 
-    function easeInOut(t) {
-      return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-    }
+    function easeOutCubic(t) {{ return 1 - Math.pow(1 - t, 3); }}
 
-    function animate(now) {
+    function animate(now) {{
       var elapsed = now - startTime;
       var rawT = Math.min(elapsed / FLIGHT_MS, 1);
 
-      var cx, cy, scale, opacity, angle;
+      var cx, cy, gScale, gOpacity, gAngle;
 
-      // ── Phase 1: Free Flight (rawT 0 → 0.46) ─────────────────────────────
-      if (rawT <= 0.46) {
-        var freeT  = rawT / 0.46;
-        var pos    = samplePath(easeInOut(freeT));
-        var bob    = Math.sin(rawT * Math.PI * 6) * 6;
-        cx      = clampVW(pos.x);
-        cy      = clampVH(pos.y + bob);
-        scale   = 1 + Math.sin(rawT * Math.PI * 4) * 0.06;
-        opacity = rawT < 0.08 ? rawT / 0.08 : 1;
-        // Save last free-flight position for capture start
-        snapGhostX = cx;
-        snapGhostY = cy;
+      // ── Phase 1: Ghost Free Flight (0 – 0.417) ────────────────────────
+      if (rawT <= 0.417) {{
+        var freeT = rawT / 0.417;
+        var eased = freeT < 0.5 ? 4*freeT*freeT*freeT : 1 - Math.pow(-2*freeT+2, 3)/2;
+        var pos = samplePath(eased);
+        var bob = Math.sin(rawT * Math.PI * 8) * 5;
+        cx = clampX(pos.x);
+        cy = clampY(pos.y + bob);
+        gScale = 1 + Math.sin(rawT * Math.PI * 5) * 0.05;
+        gOpacity = rawT < 0.05 ? rawT / 0.05 : 1;
+        // Init spring position to track ghost
+        ghostSpringX = cx;
+        ghostSpringY = cy;
 
-      // ── Phase 3: Capture (rawT 0.46 → 0.65) ──────────────────────────────
-      } else if (rawT <= 0.65) {
-        if (!captureSnapped) {
-          captureSnapped = true;
-          snapBusterX = busterX;
-          snapBusterY = busterY;
-        }
-        var captureT = (rawT - 0.46) / (0.65 - 0.46);
-        var pullFrac  = 1 - Math.pow(1 - captureT, 2.5);
-        var baseX = snapGhostX + (snapBusterX - snapGhostX) * pullFrac;
-        var baseY = snapGhostY + (snapBusterY - snapGhostY) * pullFrac;
-        spiralAngle  += 0.3 * (1 + captureT * 3);
-        var spiralR   = (1 - captureT) * 18;
-        cx      = clampVW(baseX + Math.cos(spiralAngle) * spiralR);
-        cy      = clampVH(baseY + Math.sin(spiralAngle) * spiralR);
-        scale   = Math.max(0.02, 1 - captureT * 0.98);
-        opacity = Math.max(0, 1 - captureT * captureT * 1.6);
-        packX = snapBusterX;
-        packY = snapBusterY;
+      // ── Phase 3: Beam Lock + Spring Capture (0.417 – 0.667) ───────────
+      }} else if (rawT <= 0.667) {{
+        if (!captureStarted) {{
+          captureStarted = true;
+          ghostSpringX = prevGX;
+          ghostSpringY = prevGY;
+          ghostVelX = 0;
+          ghostVelY = 0;
+        }}
+        var capT = (rawT - 0.417) / (0.667 - 0.417);
 
-      // ── Phase 4: Ghost Breaks Free (rawT 0.65 → 0.81) ────────────────────
-      } else if (rawT <= 0.81) {
-        var breakT = (rawT - 0.65) / (0.81 - 0.65);
-        if (breakT < 0.15) {
-          // Pack-shake pause; ghost invisible at pack location
-          cx      = packX;
-          cy      = packY;
-          scale   = 0.01;
-          opacity = 0;
-        } else {
-          var burstT = (breakT - 0.15) / 0.85;
-          if (!burstFired && burst) {
+        // Spring physics: pull toward buster with increasing force
+        var pullX = busterX - ghostSpringX;
+        var pullY = busterY - ghostSpringY;
+        var pullStrength = 0.001 + capT * capT * 0.012;
+        ghostVelX += pullX * pullStrength;
+        ghostVelY += pullY * pullStrength;
+        ghostVelX *= 0.92;
+        ghostVelY *= 0.92;
+        ghostSpringX += ghostVelX;
+        ghostSpringY += ghostVelY;
+
+        cx = clampX(ghostSpringX);
+        cy = clampY(ghostSpringY);
+        gScale = Math.max(0.02, 1 - capT * 0.98);
+        gOpacity = Math.max(0, 1 - capT * capT * 1.5);
+        packX = busterX;
+        packY = busterY;
+
+      // ── Phase 4: Pack Struggle + Break Free (0.667 – 0.833) ───────────
+      }} else if (rawT <= 0.833) {{
+        var breakT = (rawT - 0.667) / (0.833 - 0.667);
+
+        if (breakT < 0.40) {{
+          // Ghost hidden at pack, pack shaking
+          cx = packX;
+          cy = packY;
+          gScale = 0.01;
+          gOpacity = 0;
+        }} else {{
+          // Ghost erupts from pack
+          var eruptT = (breakT - 0.40) / 0.60;
+          if (!burstFired && burst) {{
             burstFired = true;
             burst.style.left = packX + 'px';
             burst.style.top  = packY + 'px';
             burst.classList.add('is-active');
-            setTimeout(function () { burst.classList.remove('is-active'); }, 500);
-          }
-          var bfEase  = 1 - Math.pow(1 - burstT, 3);
-          cx      = clampVW(packX + (startX - packX) * bfEase);
-          cy      = clampVH(packY + (startY - packY) * bfEase);
-          scale   = 0.2 + burstT * 0.8;
+            setTimeout(function () {{ burst.classList.remove('is-active'); }}, 500);
+          }}
+          var ease = easeOutCubic(eruptT);
+          cx = clampX(packX + (startX - packX) * ease);
+          cy = clampY(packY + (startY - packY) * ease);
+          // Overshoot: scale goes 0.2 → 1.2 → 1.0
+          var rawScale = 0.2 + eruptT * 1.0;
+          gScale = eruptT < 0.7 ? rawScale : 1.0 + (1.2 - 1.0) * (1 - easeOutCubic((eruptT - 0.7) / 0.3));
           // Flickering escape
-          var flicker = 0.35 + Math.abs(Math.sin(burstT * Math.PI * 9)) * 0.45;
-          opacity = Math.min(1, flicker + burstT * 0.2);
-        }
+          var flicker = 0.3 + Math.abs(Math.sin(eruptT * Math.PI * 10)) * 0.5;
+          gOpacity = Math.min(1, flicker + eruptT * 0.3);
+        }}
 
-      // ── Phase 5: Aftermath (rawT 0.81 → 1.0) ─────────────────────────────
-      } else {
-        cx      = startX;
-        cy      = startY;
-        scale   = 1;
-        opacity = rawT < 0.90 ? 1 : Math.max(0, 1 - (rawT - 0.90) / 0.10);
-      }
+      // ── Phase 5: Aftermath (0.833 – 1.0) ──────────────────────────────
+      }} else {{
+        cx = startX;
+        cy = startY;
+        gScale = 1;
+        gOpacity = rawT < 0.92 ? 1 : Math.max(0, 1 - (rawT - 0.92) / 0.08);
+      }}
 
-      // Direction-based tilt
-      var dx = cx - prevX, dy = cy - prevY;
-      angle  = Math.atan2(dy, dx) * (180 / Math.PI);
-      angle  = Math.max(-25, Math.min(25, angle * 0.4));
-      prevX  = cx;
-      prevY  = cy;
+      // Direction tilt
+      var dx = cx - prevGX, dy = cy - prevGY;
+      gAngle = Math.atan2(dy, dx) * (180 / Math.PI);
+      gAngle = Math.max(-25, Math.min(25, gAngle * 0.35));
+      prevGX = cx;
+      prevGY = cy;
 
       flyer.style.left      = cx + 'px';
       flyer.style.top       = cy + 'px';
-      flyer.style.transform = 'translate(-50%,-50%) rotate(' + angle.toFixed(1) + 'deg) scale(' + scale.toFixed(3) + ')';
-      flyer.style.opacity   = Math.max(0, Math.min(1, opacity)).toFixed(3);
+      flyer.style.transform = 'translate(-50%,-50%) rotate(' + gAngle.toFixed(1) + 'deg) scale(' + gScale.toFixed(3) + ')';
+      flyer.style.opacity   = Math.max(0, Math.min(1, gOpacity)).toFixed(3);
 
-      // ── Buster & Beam ─────────────────────────────────────────────────────
-      if (buster && beam) {
+      // ── Buster & Beam Logic ────────────────────────────────────────────
+      if (buster && beam) {{
 
-        // Phase 2 pursuit (rawT 0.15 → 0.46)
-        if (rawT >= 0.15 && rawT <= 0.46) {
-          if (!busterActive) {
+        // Phase 2: Buster enters and chases (0.208 – 0.500)
+        if (rawT >= 0.208 && rawT <= 0.500) {{
+          if (!busterActive) {{
             busterActive = true;
-            buster.style.display  = 'block';
-            buster.style.opacity  = '0';
-          }
-          busterX += (cx - busterX) * 0.04;
-          busterY += (cy - busterY) * 0.04;
-        }
+            buster.style.display = 'block';
+            buster.style.opacity = '0';
+          }}
+          // Weighted pursuit — heavy, purposeful movement
+          busterX += (cx - busterX) * 0.025;
+          busterY += (cy - busterY) * 0.025;
+        }}
 
-        if (busterActive && rawT < 0.81) {
-          var bdx = busterX - busterPrevX, bdy = busterY - busterPrevY;
-          var bAngle = Math.atan2(bdy, bdx) * (180 / Math.PI);
-          bAngle = Math.max(-20, Math.min(20, bAngle * 0.3));
-          busterPrevX = busterX;
-          busterPrevY = busterY;
+        // Continue pursuit during capture phase
+        if (rawT > 0.500 && rawT <= 0.667) {{
+          busterX += (cx - busterX) * 0.01;
+          busterY += (cy - busterY) * 0.01;
+        }}
 
-          var bFlip   = (rawT <= 0.46 ? cx : snapGhostX) >= busterX ? 1 : -1;
+        if (busterActive && rawT < 0.833) {{
+          // Determine facing direction
+          var bFlip = cx >= busterX ? 1 : -1;
+
+          // Buster opacity — fade in over 0.208–0.28
           var bOpacity = 1;
-          if (rawT < 0.23) bOpacity = (rawT - 0.15) / 0.08;
+          if (rawT < 0.28) bOpacity = (rawT - 0.208) / 0.072;
           bOpacity = Math.max(0, Math.min(1, bOpacity));
 
-          // Pack-shake during 0.65–0.68
+          // Pack-shake during struggle (0.667 – 0.73)
           var shakeOff = 0;
-          if (rawT >= 0.65 && rawT < 0.68) {
-            shakeOff = Math.sin((rawT - 0.65) * Math.PI * 50) * 5;
-          }
-          // Shocked scale when ghost escapes
-          var bScale = (rawT >= 0.68 && rawT < 0.81) ? 1.12 : 1;
+          if (rawT >= 0.667 && rawT < 0.73) {{
+            var shakeT = (rawT - 0.667) / 0.063;
+            shakeOff = Math.sin(shakeT * Math.PI * 40) * 6 * (1 - shakeT * 0.5);
+          }}
+
+          // Shocked recoil when ghost escapes
+          var bScale = (rawT >= 0.73 && rawT < 0.833) ? 1.1 : 1;
 
           buster.style.left      = (busterX + shakeOff).toFixed(1) + 'px';
           buster.style.top       = busterY.toFixed(1) + 'px';
-          buster.style.transform = 'translate(-50%,-50%) scaleX(' + (bFlip * bScale).toFixed(2) + ') rotate(' + (bAngle * bFlip).toFixed(1) + 'deg)';
+          buster.style.transform = 'translate(-50%,-50%) scaleX(' + (bFlip * bScale).toFixed(2) + ') scaleY(' + bScale.toFixed(2) + ')';
           buster.style.opacity   = bOpacity.toFixed(3);
 
-          // Beam target: ghost position (cx/cy during free-flight, or locked on spiral during capture)
-          var beamTargX = cx, beamTargY = cy;
-          var beamDx    = beamTargX - busterX;
-          var beamDy    = beamTargY - busterY;
-          var beamDist  = Math.sqrt(beamDx * beamDx + beamDy * beamDy);
-          var beamAngle = Math.atan2(beamDy, beamDx) * (180 / Math.PI);
-          var isCapturing = rawT > 0.46 && rawT <= 0.65;
+          // ── Beam: connects wand tip to ghost ──────────────────────────
+          // Wand tip offset relative to buster center (matches SVG geometry)
+          var wandTipX = busterX + 30 * bFlip;
+          var wandTipY = busterY - 25;
 
-          if ((beamDist < diagLen * 0.35 && bOpacity > 0.15) || isCapturing) {
+          var beamDx = cx - wandTipX;
+          var beamDy = cy - wandTipY;
+          var beamDist = Math.sqrt(beamDx * beamDx + beamDy * beamDy);
+          var beamAngle = Math.atan2(beamDy, beamDx) * (180 / Math.PI);
+          var isCapturing = rawT > 0.500 && rawT <= 0.667;
+          var inRange = beamDist < vw * 0.45 && bOpacity > 0.2;
+
+          if (inRange || isCapturing) {{
             beam.style.display   = 'block';
-            beam.style.left      = busterX + 'px';
-            beam.style.top       = busterY + 'px';
-            beam.style.width     = Math.max(4, beamDist - 20) + 'px';
+            beam.style.left      = wandTipX + 'px';
+            beam.style.top       = wandTipY + 'px';
+            beam.style.width     = Math.max(4, beamDist) + 'px';
             beam.style.transform = 'rotate(' + beamAngle.toFixed(1) + 'deg)';
-            beam.style.opacity   = (bOpacity * (isCapturing ? 1.0 : 0.7)).toFixed(3);
-            if (isCapturing) {
+            beam.style.opacity   = (bOpacity * (isCapturing ? 1 : 0.65)).toFixed(3);
+            if (isCapturing) {{
               beam.classList.add('is-locked');
-            } else {
+            }} else {{
               beam.classList.remove('is-locked');
-            }
-          } else {
+            }}
+          }} else {{
             beam.style.display = 'none';
             beam.classList.remove('is-locked');
-          }
+          }}
 
-        } else if (rawT >= 0.81 && busterActive) {
-          // Disappointed shake then fade out
-          var shakeT2 = Math.min((rawT - 0.81) / 0.10, 1);
-          var shake2  = Math.sin(shakeT2 * Math.PI * 8) * (1 - shakeT2) * 10;
-          buster.style.transform = 'translate(-50%,-50%) translateX(' + shake2.toFixed(1) + 'px)';
-          buster.style.opacity   = Math.max(0, 1 - shakeT2 * 1.5).toFixed(3);
+        }} else if (rawT >= 0.833 && busterActive) {{
+          // Head-shake disappointment, then fade out
+          var fadeT = Math.min((rawT - 0.833) / 0.12, 1);
+          var headShake = Math.sin(fadeT * Math.PI * 7) * (1 - fadeT) * 8;
+          buster.style.transform = 'translate(-50%,-50%) translateX(' + headShake.toFixed(1) + 'px)';
+          buster.style.opacity   = Math.max(0, 1 - fadeT * 1.4).toFixed(3);
           beam.style.display     = 'none';
           beam.classList.remove('is-locked');
-          if (shakeT2 >= 1) {
+          if (fadeT >= 1) {{
             buster.style.display = 'none';
             busterActive = false;
-          }
-        }
-      }
+          }}
+        }}
+      }}
 
-      if (rawT < 1) {
+      if (rawT < 1) {{
         requestAnimationFrame(animate);
-      } else {
+      }} else {{
         flyer.style.display = 'none';
         if (buster) buster.style.display = 'none';
-        if (beam)   { beam.style.display = 'none'; beam.classList.remove('is-locked'); }
+        if (beam)   {{ beam.style.display = 'none'; beam.classList.remove('is-locked'); }}
         ghost.style.visibility = 'visible';
         ghost.classList.add('is-sad');
-        if (bubble) {
-          setTimeout(function () { bubble.classList.add('is-visible'); }, 600);
-        }
-      }
-    }
+        if (bubble) {{
+          setTimeout(function () {{ bubble.classList.add('is-visible'); }}, 600);
+        }}
+      }}
+    }}
 
     requestAnimationFrame(animate);
   }
@@ -2707,7 +2733,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       pointer-events: none;
       transform: translate(-50%, -50%);
       will-change: left, top, transform, opacity;
-      filter: drop-shadow(0 0 10px rgba(196,168,130,.3));
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,.25));
     }}
     .ss-buster svg {{
       width: 100%;
@@ -2718,46 +2744,40 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       display: none;
       position: fixed;
       z-index: 9998;
-      height: 4px;
+      height: 3px;
       pointer-events: none;
       transform-origin: 0 50%;
-      background: linear-gradient(90deg, #ff9f0a 0%, rgba(255,204,2,0.8) 40%, rgba(255,159,10,0.4) 80%, transparent 100%);
-      box-shadow: 0 0 8px 2px rgba(255,159,10,0.5), 0 0 20px 4px rgba(255,159,10,0.2);
-      border-radius: 2px;
+      background: linear-gradient(90deg, #ff9f0a 0%, rgba(255,204,2,0.85) 50%, rgba(255,159,10,0.3) 85%, transparent 100%);
+      box-shadow: 0 0 6px 2px rgba(255,159,10,0.45);
+      border-radius: 1.5px;
       will-change: left, top, width, transform, opacity;
-      animation: ss-beam-pulse 0.15s ease-in-out infinite alternate;
+      animation: ss-beam-pulse 0.12s ease-in-out infinite alternate;
     }}
     @keyframes ss-beam-pulse {{
-      0% {{ opacity: 0.7; height: 3px; }}
-      100% {{ opacity: 1; height: 5px; }}
+      0% {{ opacity: 0.7; }}
+      100% {{ opacity: 1; }}
     }}
     .ss-beam.is-locked {{
       height: 6px;
-      background: linear-gradient(90deg, #ff4500 0%, #ff9f0a 30%, rgba(255,220,50,0.9) 60%, rgba(255,159,10,0.5) 85%, transparent 100%);
-      box-shadow: 0 0 14px 4px rgba(255,69,0,0.7), 0 0 28px 8px rgba(255,159,10,0.35);
-      animation: ss-beam-pulse-locked 0.08s ease-in-out infinite alternate;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #ff4500 0%, #ff9f0a 35%, rgba(255,220,50,0.9) 65%, rgba(255,159,10,0.4) 90%, transparent 100%);
+      box-shadow: 0 0 12px 4px rgba(255,69,0,0.6), 0 0 24px 6px rgba(255,159,10,0.25);
+      animation: ss-beam-locked 0.07s ease-in-out infinite alternate;
     }}
-    @keyframes ss-beam-pulse-locked {{
-      0% {{ opacity: 0.85; height: 5px; box-shadow: 0 0 14px 4px rgba(255,69,0,0.7); }}
-      100% {{ opacity: 1; height: 7px; box-shadow: 0 0 20px 6px rgba(255,69,0,0.9); }}
-    }}
-    @keyframes ss-pack-shake {{
-      0%, 100% {{ transform: translate(-50%,-50%) translateX(0); }}
-      20% {{ transform: translate(-50%,-50%) translateX(-5px); }}
-      40% {{ transform: translate(-50%,-50%) translateX(5px); }}
-      60% {{ transform: translate(-50%,-50%) translateX(-4px); }}
-      80% {{ transform: translate(-50%,-50%) translateX(4px); }}
+    @keyframes ss-beam-locked {{
+      0% {{ opacity: 0.85; box-shadow: 0 0 12px 4px rgba(255,69,0,0.6); }}
+      100% {{ opacity: 1; box-shadow: 0 0 18px 6px rgba(255,69,0,0.85); }}
     }}
     .ss-burst {{
       display: none;
       position: fixed;
       z-index: 10000;
-      width: 120px;
-      height: 120px;
+      width: 100px;
+      height: 100px;
       pointer-events: none;
       transform: translate(-50%, -50%) scale(0);
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(255,255,200,0.95) 0%, rgba(255,200,50,0.8) 25%, rgba(255,100,0,0.5) 55%, transparent 75%);
+      background: radial-gradient(circle, rgba(255,255,220,0.95) 0%, rgba(255,200,50,0.75) 30%, rgba(255,100,0,0.4) 60%, transparent 80%);
       will-change: transform, opacity;
     }}
     .ss-burst.is-active {{
@@ -2766,9 +2786,9 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     }}
     @keyframes ss-burst-anim {{
       0% {{ transform: translate(-50%,-50%) scale(0); opacity: 1; }}
-      30% {{ transform: translate(-50%,-50%) scale(1.4); opacity: 0.9; }}
-      70% {{ transform: translate(-50%,-50%) scale(2.2); opacity: 0.4; }}
-      100% {{ transform: translate(-50%,-50%) scale(3); opacity: 0; }}
+      30% {{ transform: translate(-50%,-50%) scale(1.5); opacity: 0.9; }}
+      70% {{ transform: translate(-50%,-50%) scale(2.5); opacity: 0.35; }}
+      100% {{ transform: translate(-50%,-50%) scale(3.2); opacity: 0; }}
     }}
 
     @keyframes ss-float {{
@@ -2979,76 +2999,39 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     </svg>
   </div>
   <div id="ss-buster" class="ss-buster" aria-hidden="true">
-    <svg viewBox="0 0 90 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <!-- Proton pack: bulky rectangular backpack on left side, character faces right -->
-      <rect x="8" y="30" width="18" height="26" rx="3" fill="var(--ss-buster-pack)"/>
-      <rect x="10" y="33" width="14" height="6" rx="1.5" fill="var(--ss-buster-detail)" opacity="0.6"/>
-      <rect x="10" y="42" width="14" height="5" rx="1.5" fill="var(--ss-buster-detail)" opacity="0.6"/>
-      <rect x="10" y="50" width="14" height="3" rx="1" fill="var(--ss-buster-detail)" opacity="0.4"/>
-      <!-- Cyclotron circle on pack -->
-      <circle cx="17" cy="38" r="4" fill="none" stroke="var(--ss-buster-detail)" stroke-width="1.5" opacity="0.7"/>
-      <circle cx="17" cy="38" r="2" fill="var(--ss-buster-detail)" opacity="0.5"/>
-      <!-- Warning glow light on pack -->
-      <circle cx="22" cy="52" r="2.5" fill="#ff6b00" opacity="0.85"/>
-      <circle cx="22" cy="52" r="1.5" fill="#ffcc02" opacity="0.9"/>
-      <!-- Pack straps over body -->
-      <line x1="26" y1="32" x2="32" y2="38" stroke="var(--ss-buster-detail)" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
-      <line x1="26" y1="44" x2="32" y2="50" stroke="var(--ss-buster-detail)" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
-      <!-- Body / jumpsuit: wider torso, collar -->
-      <path d="M30 32 Q42 26, 55 32 L59 72 Q44 79, 26 72 Z" fill="var(--ss-buster-suit)"/>
-      <!-- Collar -->
-      <path d="M36 32 L42 38 L48 32" stroke="var(--ss-buster-suit)" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.7"/>
-      <!-- Zipper line -->
-      <line x1="42" y1="36" x2="42" y2="62" stroke="var(--ss-buster-detail)" stroke-width="1" stroke-dasharray="2 2" opacity="0.4"/>
-      <!-- Name patch area -->
-      <rect x="47" y="42" width="9" height="5" rx="1" fill="var(--ss-buster-detail)" opacity="0.3"/>
-      <!-- Utility belt -->
-      <rect x="29" y="62" width="28" height="5" rx="1.5" fill="var(--ss-buster-boot)" opacity="0.8"/>
-      <rect x="40" y="62" width="6" height="5" rx="1" fill="var(--ss-buster-detail)" opacity="0.6"/>
+    <svg viewBox="0 0 80 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Proton pack (behind body) -->
+      <rect x="10" y="36" width="14" height="20" rx="3" fill="var(--ss-buster-pack)"/>
+      <circle cx="17" cy="44" r="3" fill="var(--ss-buster-detail)" opacity="0.6"/>
+      <circle cx="17" cy="52" r="2" fill="#ff6b00" opacity="0.8"/>
+      <!-- Body (simple jumpsuit) -->
+      <path d="M24 34 Q40 28 56 34 L58 68 Q40 74 22 68 Z" fill="var(--ss-buster-suit)"/>
+      <!-- Belt -->
+      <rect x="24" y="60" width="32" height="4" rx="1" fill="var(--ss-buster-boot)" opacity="0.7"/>
       <!-- Legs -->
-      <path d="M33 72 L30 90 L39 90 L38 72" fill="var(--ss-buster-suit)" opacity="0.95"/>
-      <path d="M46 72 L44 90 L53 90 L52 72" fill="var(--ss-buster-suit)" opacity="0.95"/>
-      <!-- Boots: black combat-style -->
-      <rect x="27" y="87" width="14" height="7" rx="3" fill="var(--ss-buster-boot)"/>
-      <rect x="42" y="87" width="13" height="7" rx="3" fill="var(--ss-buster-boot)"/>
-      <!-- Boot detail lines -->
-      <line x1="29" y1="90" x2="39" y2="90" stroke="var(--ss-buster-detail)" stroke-width="0.8" opacity="0.4"/>
-      <line x1="44" y1="90" x2="53" y2="90" stroke="var(--ss-buster-detail)" stroke-width="0.8" opacity="0.4"/>
-      <!-- Elbow pads on right arm -->
-      <ellipse cx="57" cy="50" rx="4" ry="3" fill="var(--ss-buster-detail)" opacity="0.55"/>
-      <!-- Right arm extended forward holding wand -->
-      <path d="M54 36 Q62 32, 68 30" stroke="var(--ss-buster-suit)" stroke-width="5.5" stroke-linecap="round" fill="none"/>
-      <!-- Gloved hand -->
-      <circle cx="68" cy="30" r="3.5" fill="var(--ss-buster-boot)"/>
-      <!-- Cable/hose from pack to wand: curved tube -->
-      <path d="M26 36 Q38 28, 50 30 Q60 28, 68 30" stroke="var(--ss-buster-detail)" stroke-width="2.2" fill="none" opacity="0.55" stroke-linecap="round"/>
-      <!-- Neutrino wand: cylindrical, held forward -->
-      <rect x="67" y="26" width="19" height="8" rx="3" fill="var(--ss-buster-wand)"/>
-      <rect x="69" y="27.5" width="15" height="5" rx="2" fill="var(--ss-buster-detail)" opacity="0.4"/>
+      <rect x="28" y="68" width="10" height="18" rx="3" fill="var(--ss-buster-suit)" opacity="0.9"/>
+      <rect x="42" y="68" width="10" height="18" rx="3" fill="var(--ss-buster-suit)" opacity="0.9"/>
+      <!-- Boots -->
+      <rect x="26" y="83" width="14" height="7" rx="3.5" fill="var(--ss-buster-boot)"/>
+      <rect x="40" y="83" width="14" height="7" rx="3.5" fill="var(--ss-buster-boot)"/>
+      <!-- Head -->
+      <circle cx="40" cy="20" r="14" fill="var(--ss-buster-skin)"/>
+      <!-- Hair swoosh -->
+      <path d="M26 17 Q28 6 40 5 Q52 6 54 17 L52 20 Q50 12 40 11 Q30 12 28 20 Z" fill="var(--ss-buster-hair)"/>
+      <!-- Eyes -->
+      <circle cx="34" cy="20" r="2" fill="var(--ss-buster-hair)"/>
+      <circle cx="46" cy="20" r="2" fill="var(--ss-buster-hair)"/>
+      <!-- Smirk -->
+      <path d="M36 26 Q40 29 46 26" stroke="var(--ss-buster-hair)" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.7"/>
+      <!-- Arm + wand -->
+      <path d="M52 38 L64 32" stroke="var(--ss-buster-suit)" stroke-width="6" stroke-linecap="round"/>
+      <circle cx="64" cy="32" r="3" fill="var(--ss-buster-skin)"/>
+      <rect x="63" y="28" width="14" height="7" rx="2.5" fill="var(--ss-buster-wand)"/>
       <!-- Wand tip glow -->
-      <circle cx="87" cy="30" r="4.5" fill="#ff6b00" opacity="0.85"/>
-      <circle cx="87" cy="30" r="2.8" fill="#ffcc02" opacity="0.95"/>
-      <circle cx="87" cy="30" r="1.4" fill="white" opacity="0.9"/>
-      <!-- Head: wide oval face, Bill Murray proportions -->
-      <ellipse cx="41" cy="18" rx="15" ry="14" fill="var(--ss-buster-skin)"/>
-      <!-- Hair: short, tousled, parted -->
-      <path d="M26 15 Q27 5, 41 4 Q55 5, 56 15 L55 18 Q53 10, 41 9 Q29 10, 27 18 Z" fill="var(--ss-buster-hair)"/>
-      <!-- Hair tousle detail -->
-      <path d="M34 7 Q38 5, 43 7" stroke="var(--ss-buster-hair)" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.6"/>
-      <!-- Eyes: slightly squinted, confident -->
-      <ellipse cx="35" cy="18" rx="3" ry="2.5" fill="var(--bg)" opacity="0.9"/>
-      <ellipse cx="48" cy="18" rx="3" ry="2.5" fill="var(--bg)" opacity="0.9"/>
-      <ellipse cx="35.5" cy="18.5" rx="1.8" ry="1.8" fill="var(--ss-eye)"/>
-      <ellipse cx="48.5" cy="18.5" rx="1.8" ry="1.8" fill="var(--ss-eye)"/>
-      <circle cx="36" cy="18" r="0.7" fill="var(--bg)" opacity="0.6"/>
-      <circle cx="49" cy="18" r="0.7" fill="var(--bg)" opacity="0.6"/>
-      <!-- Arched eyebrows (mischievous) -->
-      <path d="M31 13 Q35 11, 39 13" stroke="var(--ss-buster-hair)" stroke-width="1.8" stroke-linecap="round" fill="none"/>
-      <path d="M44 13 Q48 11, 52 13" stroke="var(--ss-buster-hair)" stroke-width="1.8" stroke-linecap="round" fill="none"/>
-      <!-- Wry half-smile -->
-      <path d="M35 25 Q41 28, 48 25" stroke="var(--ss-buster-hair)" stroke-width="1.6" stroke-linecap="round" fill="none" opacity="0.7"/>
-      <!-- Subtle nose -->
-      <path d="M40 21 L38 24 Q41 26 44 24 L42 21" stroke="var(--ss-buster-skin)" stroke-width="1" fill="none" opacity="0.4"/>
+      <circle cx="78" cy="31.5" r="3.5" fill="#ff6b00" opacity="0.8"/>
+      <circle cx="78" cy="31.5" r="1.8" fill="#ffcc02"/>
+      <!-- Cable from pack to wand -->
+      <path d="M24 40 Q40 30 64 32" stroke="var(--ss-buster-detail)" stroke-width="1.8" fill="none" opacity="0.4"/>
     </svg>
   </div>
   <div id="ss-beam" class="ss-beam" aria-hidden="true"></div>
