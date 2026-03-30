@@ -285,6 +285,9 @@ _RENDER_JS = r"""
 
     // TGIF banner — only on Friday when no events
     updateTGIF(events.length > 0);
+
+    // Sunday Scaries banner — all day Sunday
+    updateSundayScaries();
   }
 
   function updateHero(events, now, animate) {
@@ -602,6 +605,64 @@ _RENDER_JS = r"""
         }
       }
       _tgifInitialized = true;
+    }
+
+    banner.style.display = 'flex';
+    banner.setAttribute('aria-hidden', 'false');
+  }
+
+  // ── Sunday Scaries Banner (all day Sunday) ──────────────────────────────────
+  var _sundayInitialized = false;
+
+  function updateSundayScaries() {
+    var fmt = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'long' });
+    var dayName = fmt.format(new Date());
+    var isSunday = dayName === 'Sunday';
+
+    var banner = document.getElementById('sunday-banner');
+    if (!banner) return;
+
+    if (!isSunday) {
+      banner.style.display = 'none';
+      banner.setAttribute('aria-hidden', 'true');
+      return;
+    }
+
+    if (!_sundayInitialized) {
+      var textEl = document.getElementById('sunday-text');
+      var wispEl = document.getElementById('sunday-wisps');
+      if (textEl) {
+        var phrase = 'SUNDAY SCARIES';
+        var html = '';
+        for (var i = 0; i < phrase.length; i++) {
+          if (phrase[i] === ' ') {
+            html += '<span class="ss-space"></span>';
+          } else {
+            var delay = (i * 0.08);
+            html += '<span class="ss-letter" style="animation-delay:' + delay + 's,' + (delay + 0.4) + 's">' + phrase[i] + '</span>';
+          }
+        }
+        textEl.innerHTML = html;
+      }
+      if (wispEl) {
+        var colors = ['rgba(139,92,246,0.5)','rgba(88,80,236,0.4)','rgba(109,40,217,0.35)','rgba(167,139,250,0.3)','rgba(79,70,229,0.4)','rgba(147,197,253,0.25)'];
+        for (var w = 0; w < 30; w++) {
+          var wisp = document.createElement('span');
+          wisp.className = 'ss-wisp';
+          var left = Math.random() * 100;
+          var dur = 4 + Math.random() * 6;
+          var del = Math.random() * 10;
+          var size = 2 + Math.random() * 4;
+          var color = colors[Math.floor(Math.random() * colors.length)];
+          var drift = -20 + Math.random() * 40;
+          wisp.style.cssText = 'left:' + left + '%;width:' + size + 'px;height:'
+            + size + 'px;background:' + color
+            + ';animation-duration:' + dur + 's;animation-delay:' + del
+            + 's;--drift:' + drift + 'px;opacity:0';
+          wispEl.appendChild(wisp);
+        }
+      }
+      _sundayInitialized = true;
     }
 
     banner.style.display = 'flex';
@@ -2121,6 +2182,292 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .tgif-text {{ font-size: 1.9rem; }}
       .tgif-sub {{ font-size: 0.85rem; margin-top: 12px; }}
     }}
+
+    /* ── Sunday Scaries Banner ── */
+    :root {{
+      --ss-eye: #8b5cf6;
+      --ss-ghost: rgba(167,139,250,0.85);
+    }}
+    [data-theme="light"] {{
+      --ss-eye: #6d28d9;
+      --ss-ghost: rgba(139,92,246,0.9);
+    }}
+
+    .sunday-banner {{
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      margin: -8px 0 32px;
+      padding: 36px 28px 30px;
+      border-radius: var(--r2);
+      position: relative;
+      overflow: hidden;
+      isolation: isolate;
+      background: var(--surface);
+      border: 1px solid var(--border-2);
+      box-shadow: var(--card-shadow);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }}
+
+    .sunday-banner::before {{
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        135deg,
+        rgba(88,28,135,0.12) 0%,
+        rgba(109,40,217,0.10) 20%,
+        rgba(79,70,229,0.10) 40%,
+        rgba(55,48,163,0.08) 60%,
+        rgba(30,27,75,0.10) 80%,
+        rgba(88,28,135,0.08) 100%
+      );
+      background-size: 300% 300%;
+      animation: ss-aurora 10s ease-in-out infinite;
+      z-index: -2;
+    }}
+
+    .sunday-banner::after {{
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        105deg,
+        transparent 40%,
+        rgba(139,92,246,0.03) 45%,
+        rgba(139,92,246,0.06) 50%,
+        rgba(139,92,246,0.03) 55%,
+        transparent 60%
+      );
+      background-size: 200% 100%;
+      animation: ss-shimmer 10s ease-in-out infinite;
+      z-index: -1;
+    }}
+
+    [data-theme="light"] .sunday-banner {{
+      box-shadow: 0 2px 12px rgba(0,0,0,.04), 0 8px 32px rgba(109,40,217,.06);
+    }}
+    [data-theme="light"] .sunday-banner::before {{
+      background: linear-gradient(
+        135deg,
+        rgba(88,28,135,0.05) 0%,
+        rgba(109,40,217,0.06) 20%,
+        rgba(79,70,229,0.05) 40%,
+        rgba(55,48,163,0.04) 60%,
+        rgba(30,27,75,0.05) 80%,
+        rgba(88,28,135,0.04) 100%
+      );
+      background-size: 300% 300%;
+    }}
+    [data-theme="light"] .sunday-banner::after {{
+      background: linear-gradient(
+        105deg,
+        transparent 40%,
+        rgba(109,40,217,0.02) 45%,
+        rgba(109,40,217,0.04) 50%,
+        rgba(109,40,217,0.02) 55%,
+        transparent 60%
+      );
+      background-size: 200% 100%;
+    }}
+
+    @keyframes ss-aurora {{
+      0%, 100% {{ background-position: 0% 50%; }}
+      25% {{ background-position: 100% 25%; }}
+      50% {{ background-position: 50% 100%; }}
+      75% {{ background-position: 0% 75%; }}
+    }}
+    @keyframes ss-shimmer {{
+      0%, 100% {{ background-position: 200% 0; }}
+      50% {{ background-position: -100% 0; }}
+    }}
+
+    .ss-glow-border {{
+      position: absolute;
+      inset: -1px;
+      border-radius: inherit;
+      padding: 1px;
+      background: linear-gradient(
+        var(--ss-border-angle, 0deg),
+        rgba(139,92,246,0.3),
+        rgba(109,40,217,0.25),
+        rgba(79,70,229,0.3),
+        rgba(55,48,163,0.2),
+        rgba(88,28,135,0.25),
+        rgba(167,139,250,0.3)
+      );
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      animation: ss-border-spin 10s linear infinite;
+      z-index: 0;
+      pointer-events: none;
+    }}
+    [data-theme="light"] .ss-glow-border {{
+      background: linear-gradient(
+        var(--ss-border-angle, 0deg),
+        rgba(139,92,246,0.2),
+        rgba(109,40,217,0.18),
+        rgba(79,70,229,0.2),
+        rgba(55,48,163,0.15),
+        rgba(88,28,135,0.18),
+        rgba(167,139,250,0.2)
+      );
+    }}
+    @keyframes ss-border-spin {{
+      to {{ --ss-border-angle: 360deg; }}
+    }}
+    @property --ss-border-angle {{
+      syntax: '<angle>';
+      initial-value: 0deg;
+      inherits: false;
+    }}
+
+    /* Ghost character */
+    .ss-ghost {{
+      width: 56px;
+      height: 70px;
+      margin-bottom: 8px;
+      color: var(--ss-ghost);
+      filter: drop-shadow(0 0 16px rgba(139,92,246,.35));
+      animation: ss-float 5s ease-in-out infinite;
+      position: relative;
+      z-index: 1;
+    }}
+    .ss-ghost svg {{
+      width: 100%;
+      height: 100%;
+    }}
+    @keyframes ss-float {{
+      0%, 100% {{ transform: translateY(0) rotate(0deg); }}
+      15% {{ transform: translateY(-8px) rotate(-2deg); }}
+      30% {{ transform: translateY(-3px) rotate(0deg); }}
+      50% {{ transform: translateY(-12px) rotate(2deg); }}
+      70% {{ transform: translateY(-5px) rotate(-1deg); }}
+      85% {{ transform: translateY(-9px) rotate(1deg); }}
+    }}
+
+    /* Text styling */
+    .ss-text {{
+      display: inline-flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 2px;
+      font-size: clamp(1.3rem, 4vw, 1.8rem);
+      font-weight: 850;
+      letter-spacing: 0.03em;
+      line-height: 1.2;
+      position: relative;
+      z-index: 1;
+    }}
+    .ss-space {{
+      width: 8px;
+      display: inline-block;
+    }}
+    .ss-letter {{
+      display: inline-block;
+      background: linear-gradient(135deg, #8b5cf6, #6d28d9, #4f46e5, #7c3aed, #a78bfa, #818cf8);
+      background-size: 300% 300%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: ss-wave 4s ease-in-out infinite, ss-gradient 10s ease infinite;
+      filter: drop-shadow(0 0 10px rgba(139,92,246,.2));
+    }}
+    [data-theme="light"] .ss-letter {{
+      background: linear-gradient(135deg, #7c3aed, #5b21b6, #4338ca, #6d28d9, #8b5cf6, #6366f1);
+      background-size: 300% 300%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 6px rgba(109,40,217,.12));
+    }}
+    @keyframes ss-wave {{
+      0%, 100% {{ transform: translateY(0) rotate(0deg); }}
+      25% {{ transform: translateY(-3px) rotate(-0.5deg); }}
+      50% {{ transform: translateY(1px) rotate(0.3deg); }}
+      75% {{ transform: translateY(-2px) rotate(-0.3deg); }}
+    }}
+    @keyframes ss-gradient {{
+      0%, 100% {{ background-position: 0% 50%; }}
+      33% {{ background-position: 100% 0%; }}
+      66% {{ background-position: 50% 100%; }}
+    }}
+
+    .ss-sub {{
+      display: block;
+      margin-top: 10px;
+      font-size: 0.82rem;
+      font-weight: 520;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-2);
+      position: relative;
+      z-index: 1;
+      opacity: 0;
+      animation: ss-sub-in 0.8s ease-out 1.6s forwards;
+    }}
+    @keyframes ss-sub-in {{
+      from {{ opacity: 0; transform: translateY(8px); }}
+      to {{ opacity: 0.6; transform: translateY(0); }}
+    }}
+
+    /* Floating wisps (eerie particles) */
+    .ss-wisps {{
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 0;
+    }}
+    .ss-wisp {{
+      position: absolute;
+      bottom: -6px;
+      border-radius: 50%;
+      opacity: 0;
+      animation: ss-rise linear infinite;
+      filter: blur(1px);
+    }}
+    @keyframes ss-rise {{
+      0% {{ transform: translateY(0) translateX(0); opacity: 0; }}
+      10% {{ opacity: 0.6; }}
+      50% {{ opacity: 0.4; }}
+      90% {{ opacity: 0.15; }}
+      100% {{ transform: translateY(-130px) translateX(var(--drift, 0px)); opacity: 0; }}
+    }}
+
+    @media (prefers-reduced-motion: reduce) {{
+      .sunday-banner, .sunday-banner::before, .sunday-banner::after {{ animation: none !important; }}
+      .ss-letter {{ animation: none !important; }}
+      .ss-ghost {{ animation: none !important; }}
+      .ss-sub {{ animation: none !important; opacity: 0.6 !important; }}
+      .ss-glow-border {{ animation: none !important; }}
+      .ss-wisps {{ display: none !important; }}
+    }}
+
+    @media (max-width: 480px) {{
+      .sunday-banner {{ padding: 28px 18px 22px; margin: -4px 0 24px; }}
+      .ss-ghost {{ width: 44px; height: 55px; }}
+      .ss-text {{ font-size: 1.1rem; gap: 1px; }}
+      .ss-space {{ width: 5px; }}
+      .ss-sub {{ font-size: 0.68rem; margin-top: 8px; }}
+    }}
+    @media (min-width: 481px) and (max-width: 700px) {{
+      .sunday-banner {{ padding: 32px 24px 26px; }}
+      .ss-ghost {{ width: 50px; height: 62px; }}
+      .ss-text {{ font-size: 1.4rem; }}
+      .ss-sub {{ font-size: 0.75rem; }}
+    }}
+    @media (min-width: 900px) {{
+      .sunday-banner {{ padding: 40px 32px 34px; margin: -8px 0 36px; }}
+      .ss-ghost {{ width: 64px; height: 80px; }}
+      .ss-text {{ font-size: 1.9rem; }}
+      .ss-sub {{ font-size: 0.85rem; margin-top: 12px; }}
+    }}
   </style>
 </head>
 <body>
@@ -2145,6 +2492,22 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       <div class="tgif-emoji">🎉</div>
       <span class="tgif-text" id="tgif-text"></span>
       <span class="tgif-sub">You made it through the week</span>
+    </div>
+    <div class="sunday-banner" id="sunday-banner" aria-hidden="true">
+      <div class="ss-glow-border"></div>
+      <div class="ss-wisps" id="sunday-wisps"></div>
+      <div class="ss-ghost" aria-hidden="true">
+        <svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M40 8C22.3 8 8 22.3 8 40v30c0 2 0.5 3.8 1.2 5.2L16 68l8 8 8-8 8 8 8-8 8 8 8-8 6.8 7.2c0.7-1.4 1.2-3.2 1.2-5.2V40c8 0-14.3-32-32-32z" fill="currentColor" opacity="0.9"/>
+          <ellipse cx="28" cy="40" rx="5" ry="6" fill="var(--bg)" opacity="0.85"/>
+          <ellipse cx="52" cy="40" rx="5" ry="6" fill="var(--bg)" opacity="0.85"/>
+          <ellipse cx="28" cy="41" rx="3" ry="4" fill="var(--ss-eye)"/>
+          <ellipse cx="52" cy="41" rx="3" ry="4" fill="var(--ss-eye)"/>
+          <ellipse cx="40" cy="54" rx="4" ry="3" fill="var(--bg)" opacity="0.5"/>
+        </svg>
+      </div>
+      <span class="ss-text" id="sunday-text"></span>
+      <span class="ss-sub">Tomorrow is Monday&hellip;</span>
     </div>
     <div id="agenda-events">{''.join(sections)}</div>
     <footer>
