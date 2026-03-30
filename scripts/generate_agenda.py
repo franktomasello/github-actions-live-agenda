@@ -682,83 +682,113 @@ _RENDER_JS = r"""
     var bubble  = document.getElementById('ss-bubble');
     if (!ghost || !flyer) return;
 
-    // Measure ghost's resting position
     var rect = ghost.getBoundingClientRect();
     var startX = rect.left + rect.width / 2;
     var startY = rect.top  + rect.height / 2;
 
-    // Show the flyer at the ghost's position
     flyer.style.left = startX + 'px';
     flyer.style.top  = startY + 'px';
     flyer.style.display = 'block';
     ghost.style.visibility = 'hidden';
 
-    // Build waypoints (viewport-relative for responsiveness)
     var vw = window.innerWidth, vh = window.innerHeight;
-    var waypoints = [
-      { x: startX,         y: startY,         t: 0    },
-      { x: vw * 0.7,       y: vh * 0.12,      t: 0.08 },
-      { x: vw * 0.85,      y: vh * 0.35,      t: 0.18 },
-      { x: vw * 0.55,      y: vh * 0.55,      t: 0.28 },
-      { x: vw * 0.2,       y: vh * 0.3,       t: 0.38 },
-      { x: vw * 0.1,       y: vh * 0.65,      t: 0.48 },
-      { x: vw * 0.45,      y: vh * 0.2,       t: 0.58 },
-      { x: vw * 0.75,      y: vh * 0.5,       t: 0.68 },
-      { x: vw * 0.3,       y: vh * 0.7,       t: 0.78 },
-      { x: vw * 0.5,       y: vh * 0.15,      t: 0.88 },
-      { x: startX,         y: startY,         t: 1.0  },
+
+    // Waypoints define the path — Catmull-Rom will smooth between them
+    var pts = [
+      { x: startX,         y: startY         },  // start (banner)
+      { x: vw * 0.65,      y: vh * 0.10      },  // sweep up-right
+      { x: vw * 0.82,      y: vh * 0.30      },  // arc down-right
+      { x: vw * 0.60,      y: vh * 0.50      },  // drift center
+      { x: vw * 0.25,      y: vh * 0.28      },  // swoop left-up
+      { x: vw * 0.12,      y: vh * 0.58      },  // dive left
+      { x: vw * 0.40,      y: vh * 0.18      },  // rise center
+      { x: vw * 0.78,      y: vh * 0.45      },  // arc right
+      { x: vw * 0.35,      y: vh * 0.65      },  // swoop low-left
+      { x: vw * 0.55,      y: vh * 0.12      },  // rise high
+      { x: startX,         y: startY         },  // return home
     ];
 
-    var FLIGHT_MS  = 10000;
-    var startTime  = performance.now();
+    // Catmull-Rom spline interpolation for perfectly smooth curves
+    function catmullRom(p0, p1, p2, p3, t) {
+      var t2 = t * t, t3 = t2 * t;
+      return 0.5 * (
+        (2 * p1) +
+        (-p0 + p2) * t +
+        (2*p0 - 5*p1 + 4*p2 - p3) * t2 +
+        (-p0 + 3*p1 - 3*p2 + p3) * t3
+      );
+    }
 
-    // Easing function for smoother motion
-    function ease(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
+    // Sample the spline at parameter t (0..1 over entire path)
+    function samplePath(t) {
+      var n = pts.length - 1;
+      var segment = t * n;
+      var i = Math.min(Math.floor(segment), n - 1);
+      var lt = segment - i;
 
-    // Interpolate between waypoints with smoothing
-    function lerp(a, b, t) { return a + (b - a) * t; }
+      var p0 = pts[Math.max(i - 1, 0)];
+      var p1 = pts[i];
+      var p2 = pts[Math.min(i + 1, n)];
+      var p3 = pts[Math.min(i + 2, n)];
+
+      return {
+        x: catmullRom(p0.x, p1.x, p2.x, p3.x, lt),
+        y: catmullRom(p0.y, p1.y, p2.y, p3.y, lt),
+      };
+    }
+
+    var FLIGHT_MS = 10000;
+    var startTime = performance.now();
+    var prevX = startX, prevY = startY;
+
+    // Smooth ease-in-out for overall pacing
+    function easeInOut(t) {
+      return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;
+    }
 
     function animate(now) {
       var elapsed = now - startTime;
-      var progress = Math.min(elapsed / FLIGHT_MS, 1);
+      var rawT = Math.min(elapsed / FLIGHT_MS, 1);
 
-      // Find current segment
-      var segIdx = 0;
-      for (var s = 0; s < waypoints.length - 1; s++) {
-        if (progress >= waypoints[s].t && progress <= waypoints[s + 1].t) {
-          segIdx = s;
-          break;
-        }
-      }
+      // Ease the overall progress for gentle start/end
+      var t = easeInOut(rawT);
 
-      var segStart = waypoints[segIdx];
-      var segEnd   = waypoints[segIdx + 1] || waypoints[waypoints.length - 1];
-      var segLen   = segEnd.t - segStart.t;
-      var segT     = segLen > 0 ? ease((progress - segStart.t) / segLen) : 1;
+      var pos = samplePath(t);
 
-      var cx = lerp(segStart.x, segEnd.x, segT);
-      var cy = lerp(segStart.y, segEnd.y, segT);
+      // Gentle vertical bob layered on top of the path
+      var bob = Math.sin(rawT * Math.PI * 6) * 6;
+      var cx = pos.x;
+      var cy = pos.y + bob;
 
-      // Ghost rotation follows movement direction
-      var dx = segEnd.x - segStart.x;
-      var angle = dx > 0 ? Math.min(dx / vw * 30, 15) : Math.max(dx / vw * 30, -15);
-      // Add a wobble
-      angle += Math.sin(progress * Math.PI * 8) * 5;
+      // Rotation from actual movement direction (smoothed)
+      var dx = cx - prevX;
+      var dy = cy - prevY;
+      var angle = Math.atan2(dy, dx) * (180 / Math.PI);
+      // Clamp rotation so ghost stays mostly upright
+      angle = Math.max(-25, Math.min(25, angle * 0.4));
+      prevX = cx;
+      prevY = cy;
+
+      // Subtle scale breathing
+      var scale = 1 + Math.sin(rawT * Math.PI * 4) * 0.06;
+
+      // Smooth opacity: ease in first 8%, ease out last 8%
+      var opacity = 1;
+      if (rawT < 0.08) opacity = rawT / 0.08;
+      else if (rawT > 0.92) opacity = (1 - rawT) / 0.08;
 
       flyer.style.left = cx + 'px';
       flyer.style.top  = cy + 'px';
-      flyer.style.transform = 'translate(-50%, -50%) rotate(' + angle.toFixed(1) + 'deg)';
-      flyer.style.opacity = progress < 0.05 ? (progress / 0.05) : (progress > 0.92 ? ((1 - progress) / 0.08) : 1);
+      flyer.style.transform = 'translate(-50%,-50%) rotate(' + angle.toFixed(1) + 'deg) scale(' + scale.toFixed(3) + ')';
+      flyer.style.opacity = opacity.toFixed(3);
 
-      if (progress < 1) {
+      if (rawT < 1) {
         requestAnimationFrame(animate);
       } else {
-        // Flight complete — return ghost to banner as sad
         flyer.style.display = 'none';
         ghost.style.visibility = 'visible';
         ghost.classList.add('is-sad');
 
-        // Show speech bubble after a beat
         if (bubble) {
           setTimeout(function() {
             bubble.classList.add('is-visible');
@@ -2693,7 +2723,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
           <line x1="55" y1="34" x2="49" y2="36" stroke="var(--ss-eye)" stroke-width="1.8" stroke-linecap="round"/>
           <path d="M33 56 Q40 52 47 56" stroke="var(--bg)" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.6"/>
         </svg>
-        <div class="ss-bubble" id="ss-bubble">so much for the weekend&hellip; back to the work grind!</div>
+        <div class="ss-bubble" id="ss-bubble">So much for the weekend&hellip; Back to the work grind!</div>
       </div>
       <span class="ss-text" id="sunday-text"></span>
       <span class="ss-sub">Tomorrow is Monday&hellip;</span>
