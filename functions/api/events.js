@@ -484,6 +484,16 @@ function parseICS(text, timezone, windowHours, maxEvents) {
     const rrule       = props.get('RRULE');
     const recurrenceId = props.get('RECURRENCE-ID');
 
+    // Helper: check if a UTC timestamp falls in the AM in the configured timezone
+    const isAM = (dt) => {
+      const hour = +getFmt(timezone).formatToParts(dt)
+        .find(p => p.type === 'hour').value;
+      return (hour % 24) < 12;
+    };
+
+    // Hide the morning "Away from Desk" block (keep the evening one)
+    const isAwayFromDesk = title.toLowerCase() === 'away from desk';
+
     // Build EXDATE set for this event
     const exdates = new Set();
     for (const entry of exdateEntries) {
@@ -505,6 +515,7 @@ function parseICS(text, timezone, windowHours, maxEvents) {
         rrule.value, start, duration, isAllDay, now, windowEnd, exdates, timezone
       );
       for (const occ of occurrences) {
+        if (isAwayFromDesk && isAM(occ.start)) continue;
         events.push({
           title, location, description, isAllDay,
           start: occ.start.toISOString(),
@@ -514,6 +525,7 @@ function parseICS(text, timezone, windowHours, maxEvents) {
     } else {
       // Single event or a RECURRENCE-ID override instance
       if (end < now || start > windowEnd) continue;
+      if (isAwayFromDesk && isAM(start)) continue;
       events.push({ title, start: start.toISOString(), end: end.toISOString(), location, description, isAllDay });
     }
   }

@@ -700,9 +700,15 @@ def parse_events(raw: bytes, tz: ZoneInfo) -> list[Event]:
         else:
             end, _ = ensure_dt(raw_end.dt, tz)
 
+        title = str(component.get("SUMMARY", "Untitled"))
+
+        # Hide the morning "Away from Desk" block (keep the evening one)
+        if title.lower() == "away from desk" and start.hour < 12:
+            continue
+
         events.append(
             Event(
-                title=str(component.get("SUMMARY", "Untitled")),
+                title=title,
                 start=start,
                 end=end,
                 location=str(component.get("LOCATION", "")),
