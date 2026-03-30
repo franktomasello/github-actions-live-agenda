@@ -680,6 +680,8 @@ _RENDER_JS = r"""
     var ghost   = document.querySelector('.ss-ghost');
     var flyer   = document.getElementById('ss-flyer');
     var bubble  = document.getElementById('ss-bubble');
+    var buster  = document.getElementById('ss-buster');
+    var beam    = document.getElementById('ss-beam');
     if (!ghost || !flyer) return;
 
     var rect = ghost.getBoundingClientRect();
@@ -692,6 +694,7 @@ _RENDER_JS = r"""
     ghost.style.visibility = 'hidden';
 
     var vw = window.innerWidth, vh = window.innerHeight;
+    var diagLen = Math.sqrt(vw * vw + vh * vh);
 
     // Waypoints define the path — Catmull-Rom will smooth between them
     var pts = [
@@ -741,6 +744,11 @@ _RENDER_JS = r"""
     var startTime = performance.now();
     var prevX = startX, prevY = startY;
 
+    // Buster pursuit state
+    var busterX = vw + 40, busterY = vh * 0.85;
+    var busterPrevX = busterX, busterPrevY = busterY;
+    var busterActive = false;
+
     // Smooth ease-in-out for overall pacing
     function easeInOut(t) {
       return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;
@@ -782,10 +790,78 @@ _RENDER_JS = r"""
       flyer.style.transform = 'translate(-50%,-50%) rotate(' + angle.toFixed(1) + 'deg) scale(' + scale.toFixed(3) + ')';
       flyer.style.opacity = opacity.toFixed(3);
 
+      // ── Ghostbuster pursuit ──
+      if (buster && beam) {
+        if (rawT >= 0.2 && rawT < 0.92) {
+          if (!busterActive) {
+            busterActive = true;
+            buster.style.display = 'block';
+            buster.style.opacity = '0';
+          }
+
+          // Chase factor — slows as ghost escapes
+          var chase = rawT < 0.85 ? 0.035 : 0.012;
+          busterX += (cx - busterX) * chase;
+          busterY += (cy - busterY) * chase;
+
+          // Buster tilt from movement direction
+          var bdx = busterX - busterPrevX;
+          var bdy = busterY - busterPrevY;
+          var bAngle = Math.atan2(bdy, bdx) * (180 / Math.PI);
+          bAngle = Math.max(-20, Math.min(20, bAngle * 0.3));
+          busterPrevX = busterX;
+          busterPrevY = busterY;
+
+          // Flip to face the ghost
+          var bFlip = (cx >= busterX) ? 1 : -1;
+
+          // Buster opacity: fade in 0.20–0.28, fade out 0.85–0.92
+          var bOpacity = 1;
+          if (rawT < 0.28) bOpacity = (rawT - 0.2) / 0.08;
+          else if (rawT > 0.85) bOpacity = (0.92 - rawT) / 0.07;
+          bOpacity = Math.max(0, Math.min(1, bOpacity));
+
+          buster.style.left = busterX + 'px';
+          buster.style.top = busterY + 'px';
+          buster.style.transform = 'translate(-50%,-50%) scaleX(' + bFlip + ') rotate(' + (bAngle * bFlip).toFixed(1) + 'deg)';
+          buster.style.opacity = bOpacity.toFixed(3);
+
+          // Beam from buster toward ghost
+          var beamDx = cx - busterX;
+          var beamDy = cy - busterY;
+          var dist = Math.sqrt(beamDx * beamDx + beamDy * beamDy);
+          var beamAngle = Math.atan2(beamDy, beamDx) * (180 / Math.PI);
+
+          if (dist < diagLen * 0.35 && bOpacity > 0.15) {
+            beam.style.display = 'block';
+            beam.style.left = busterX + 'px';
+            beam.style.top = busterY + 'px';
+            beam.style.width = Math.max(0, dist - 20) + 'px';
+            beam.style.transform = 'rotate(' + beamAngle.toFixed(1) + 'deg)';
+            beam.style.opacity = (bOpacity * 0.7).toFixed(3);
+          } else {
+            beam.style.display = 'none';
+          }
+        } else if (rawT >= 0.92 && busterActive) {
+          // Disappointed shake and fade out
+          var shakeT = Math.min((rawT - 0.92) / 0.08, 1);
+          var shake = Math.sin(shakeT * Math.PI * 8) * (1 - shakeT) * 10;
+          buster.style.transform = 'translate(-50%,-50%) translateX(' + shake.toFixed(1) + 'px)';
+          buster.style.opacity = Math.max(0, 1 - shakeT * 1.3).toFixed(3);
+          beam.style.display = 'none';
+          if (shakeT >= 1) {
+            buster.style.display = 'none';
+            busterActive = false;
+          }
+        }
+      }
+
       if (rawT < 1) {
         requestAnimationFrame(animate);
       } else {
         flyer.style.display = 'none';
+        if (buster) buster.style.display = 'none';
+        if (beam) beam.style.display = 'none';
         ghost.style.visibility = 'visible';
         ghost.classList.add('is-sad');
 
@@ -2318,10 +2394,24 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     :root {{
       --ss-eye: #8b5cf6;
       --ss-ghost: rgba(167,139,250,0.85);
+      --ss-buster-suit: #c4a882;
+      --ss-buster-pack: #555;
+      --ss-buster-detail: #888;
+      --ss-buster-skin: #f0c8a0;
+      --ss-buster-hair: #4a3728;
+      --ss-buster-boot: #333;
+      --ss-buster-wand: #777;
     }}
     [data-theme="light"] {{
       --ss-eye: #6d28d9;
       --ss-ghost: rgba(139,92,246,0.9);
+      --ss-buster-suit: #b89968;
+      --ss-buster-pack: #444;
+      --ss-buster-detail: #666;
+      --ss-buster-skin: #e8b888;
+      --ss-buster-hair: #3a2718;
+      --ss-buster-boot: #222;
+      --ss-buster-wand: #666;
     }}
 
     .sunday-banner {{
@@ -2542,6 +2632,42 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       width: 100%;
       height: 100%;
     }}
+
+    /* Ghostbuster overlay */
+    .ss-buster {{
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      width: 64px;
+      height: 80px;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      will-change: left, top, transform, opacity;
+      filter: drop-shadow(0 0 10px rgba(196,168,130,.3));
+    }}
+    .ss-buster svg {{
+      width: 100%;
+      height: 100%;
+    }}
+    /* Proton beam */
+    .ss-beam {{
+      display: none;
+      position: fixed;
+      z-index: 9998;
+      height: 4px;
+      pointer-events: none;
+      transform-origin: 0 50%;
+      background: linear-gradient(90deg, #ff9f0a 0%, rgba(255,204,2,0.8) 40%, rgba(255,159,10,0.4) 80%, transparent 100%);
+      box-shadow: 0 0 8px 2px rgba(255,159,10,0.5), 0 0 20px 4px rgba(255,159,10,0.2);
+      border-radius: 2px;
+      will-change: left, top, width, transform, opacity;
+      animation: ss-beam-pulse 0.15s ease-in-out infinite alternate;
+    }}
+    @keyframes ss-beam-pulse {{
+      0% {{ opacity: 0.7; height: 3px; }}
+      100% {{ opacity: 1; height: 5px; }}
+    }}
+
     @keyframes ss-float {{
       0%, 100% {{ transform: translateY(0) rotate(0deg); }}
       15% {{ transform: translateY(-8px) rotate(-2deg); }}
@@ -2648,6 +2774,8 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .ss-glow-border {{ animation: none !important; }}
       .ss-wisps {{ display: none !important; }}
       .ss-flyer {{ display: none !important; }}
+      .ss-buster {{ display: none !important; }}
+      .ss-beam {{ display: none !important; }}
       .ss-bubble {{ opacity: 1 !important; transform: none !important; }}
     }}
 
@@ -2661,6 +2789,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .ss-bubble::before {{ left: 50%; top: auto; bottom: -6px; transform: translateX(-50%) rotate(-45deg); }}
       .ss-bubble.is-visible {{ transform: translateX(-50%) translateY(0) scale(1); }}
       .ss-flyer {{ width: 48px; height: 60px; }}
+      .ss-buster {{ width: 48px; height: 60px; }}
     }}
     @media (min-width: 481px) and (max-width: 700px) {{
       .sunday-banner {{ padding: 32px 24px 26px; }}
@@ -2668,6 +2797,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .ss-text {{ font-size: 1.4rem; }}
       .ss-sub {{ font-size: 0.75rem; }}
       .ss-flyer {{ width: 56px; height: 70px; }}
+      .ss-buster {{ width: 56px; height: 70px; }}
     }}
     @media (min-width: 900px) {{
       .sunday-banner {{ padding: 40px 32px 34px; margin: -8px 0 36px; }}
@@ -2675,6 +2805,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .ss-text {{ font-size: 1.9rem; }}
       .ss-sub {{ font-size: 0.85rem; margin-top: 12px; }}
       .ss-flyer {{ width: 72px; height: 90px; }}
+      .ss-buster {{ width: 72px; height: 90px; }}
     }}
   </style>
 </head>
@@ -2743,6 +2874,36 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       <ellipse cx="40" cy="54" rx="4" ry="3" fill="var(--bg)" opacity="0.5"/>
     </svg>
   </div>
+  <div id="ss-buster" class="ss-buster" aria-hidden="true">
+    <svg viewBox="0 0 90 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="15" y="38" width="14" height="22" rx="3" fill="var(--ss-buster-pack)"/>
+      <rect x="17" y="41" width="10" height="5" rx="1" fill="var(--ss-buster-detail)" opacity="0.5"/>
+      <rect x="17" y="49" width="10" height="4" rx="1" fill="var(--ss-buster-detail)" opacity="0.5"/>
+      <circle cx="22" cy="56" r="2.5" fill="#ff9f0a" opacity="0.7"/>
+      <path d="M28 34 Q38 28, 48 34 L52 72 Q40 78, 24 72 Z" fill="var(--ss-buster-suit)"/>
+      <rect x="26" y="58" width="22" height="4" rx="1" fill="var(--ss-buster-boot)"/>
+      <path d="M30 72 L28 88 L36 88 L34 72" fill="var(--ss-buster-suit)" opacity="0.9"/>
+      <path d="M40 72 L38 88 L46 88 L44 72" fill="var(--ss-buster-suit)" opacity="0.9"/>
+      <rect x="26" y="86" width="12" height="6" rx="3" fill="var(--ss-buster-boot)"/>
+      <rect x="36" y="86" width="12" height="6" rx="3" fill="var(--ss-buster-boot)"/>
+      <circle cx="38" cy="20" r="13" fill="var(--ss-buster-skin)"/>
+      <path d="M25 16 Q25 6, 38 6 Q51 6, 51 16 L50 20 Q48 13, 38 12 Q28 13, 26 20 Z" fill="var(--ss-buster-hair)"/>
+      <ellipse cx="34" cy="20" rx="2" ry="2.5" fill="var(--bg)" opacity="0.85"/>
+      <ellipse cx="43" cy="20" rx="2" ry="2.5" fill="var(--bg)" opacity="0.85"/>
+      <ellipse cx="35" cy="21" rx="1.2" ry="1.5" fill="var(--ss-eye)"/>
+      <ellipse cx="44" cy="21" rx="1.2" ry="1.5" fill="var(--ss-eye)"/>
+      <line x1="31" y1="16" x2="36" y2="17.5" stroke="var(--ss-buster-hair)" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="47" y1="16" x2="42" y2="17.5" stroke="var(--ss-buster-hair)" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="36" y1="27" x2="42" y2="27" stroke="var(--ss-buster-hair)" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
+      <path d="M48 40 L60 35 L68 32" stroke="var(--ss-buster-suit)" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.9"/>
+      <circle cx="68" cy="32" r="3" fill="var(--ss-buster-skin)"/>
+      <rect x="66" y="28" width="16" height="7" rx="2" fill="var(--ss-buster-wand)"/>
+      <circle cx="83" cy="31.5" r="3.5" fill="#ff9f0a" opacity="0.9"/>
+      <circle cx="83" cy="31.5" r="1.8" fill="#ffcc02"/>
+      <path d="M24 44 Q32 36, 48 38 Q58 34, 66 32" stroke="var(--ss-buster-detail)" stroke-width="2" fill="none" opacity="0.4" stroke-linecap="round"/>
+    </svg>
+  </div>
+  <div id="ss-beam" class="ss-beam" aria-hidden="true"></div>
   <button class="theme-toggle" aria-label="Toggle light/dark mode" title="Toggle theme">
     <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
     <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
