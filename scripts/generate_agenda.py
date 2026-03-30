@@ -613,6 +613,7 @@ _RENDER_JS = r"""
 
   // ── Sunday Scaries Banner (all day Sunday) ──────────────────────────────────
   var _sundayInitialized = false;
+  var _sundayFlightDone  = false;
 
   function updateSundayScaries() {
     var fmt = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'long' });
@@ -667,6 +668,106 @@ _RENDER_JS = r"""
 
     banner.style.display = 'flex';
     banner.setAttribute('aria-hidden', 'false');
+
+    // Trigger ghost flight once on first load
+    if (!_sundayFlightDone) {
+      _sundayFlightDone = true;
+      setTimeout(startGhostFlight, 1200);
+    }
+  }
+
+  function startGhostFlight() {
+    var ghost   = document.querySelector('.ss-ghost');
+    var flyer   = document.getElementById('ss-flyer');
+    var bubble  = document.getElementById('ss-bubble');
+    if (!ghost || !flyer) return;
+
+    // Measure ghost's resting position
+    var rect = ghost.getBoundingClientRect();
+    var startX = rect.left + rect.width / 2;
+    var startY = rect.top  + rect.height / 2;
+
+    // Show the flyer at the ghost's position
+    flyer.style.left = startX + 'px';
+    flyer.style.top  = startY + 'px';
+    flyer.style.display = 'block';
+    ghost.style.visibility = 'hidden';
+
+    // Build waypoints (viewport-relative for responsiveness)
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var waypoints = [
+      { x: startX,         y: startY,         t: 0    },
+      { x: vw * 0.7,       y: vh * 0.12,      t: 0.08 },
+      { x: vw * 0.85,      y: vh * 0.35,      t: 0.18 },
+      { x: vw * 0.55,      y: vh * 0.55,      t: 0.28 },
+      { x: vw * 0.2,       y: vh * 0.3,       t: 0.38 },
+      { x: vw * 0.1,       y: vh * 0.65,      t: 0.48 },
+      { x: vw * 0.45,      y: vh * 0.2,       t: 0.58 },
+      { x: vw * 0.75,      y: vh * 0.5,       t: 0.68 },
+      { x: vw * 0.3,       y: vh * 0.7,       t: 0.78 },
+      { x: vw * 0.5,       y: vh * 0.15,      t: 0.88 },
+      { x: startX,         y: startY,         t: 1.0  },
+    ];
+
+    var FLIGHT_MS  = 10000;
+    var startTime  = performance.now();
+
+    // Easing function for smoother motion
+    function ease(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
+
+    // Interpolate between waypoints with smoothing
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    function animate(now) {
+      var elapsed = now - startTime;
+      var progress = Math.min(elapsed / FLIGHT_MS, 1);
+
+      // Find current segment
+      var segIdx = 0;
+      for (var s = 0; s < waypoints.length - 1; s++) {
+        if (progress >= waypoints[s].t && progress <= waypoints[s + 1].t) {
+          segIdx = s;
+          break;
+        }
+      }
+
+      var segStart = waypoints[segIdx];
+      var segEnd   = waypoints[segIdx + 1] || waypoints[waypoints.length - 1];
+      var segLen   = segEnd.t - segStart.t;
+      var segT     = segLen > 0 ? ease((progress - segStart.t) / segLen) : 1;
+
+      var cx = lerp(segStart.x, segEnd.x, segT);
+      var cy = lerp(segStart.y, segEnd.y, segT);
+
+      // Ghost rotation follows movement direction
+      var dx = segEnd.x - segStart.x;
+      var angle = dx > 0 ? Math.min(dx / vw * 30, 15) : Math.max(dx / vw * 30, -15);
+      // Add a wobble
+      angle += Math.sin(progress * Math.PI * 8) * 5;
+
+      flyer.style.left = cx + 'px';
+      flyer.style.top  = cy + 'px';
+      flyer.style.transform = 'translate(-50%, -50%) rotate(' + angle.toFixed(1) + 'deg)';
+      flyer.style.opacity = progress < 0.05 ? (progress / 0.05) : (progress > 0.92 ? ((1 - progress) / 0.08) : 1);
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        // Flight complete — return ghost to banner as sad
+        flyer.style.display = 'none';
+        ghost.style.visibility = 'visible';
+        ghost.classList.add('is-sad');
+
+        // Show speech bubble after a beat
+        if (bubble) {
+          setTimeout(function() {
+            bubble.classList.add('is-visible');
+          }, 600);
+        }
+      }
+    }
+
+    requestAnimationFrame(animate);
   }
 })();
 """
@@ -2342,6 +2443,75 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       width: 100%;
       height: 100%;
     }}
+    .ss-ghost-sad {{ display: none; }}
+    .ss-ghost.is-sad .ss-ghost-normal {{ display: none; }}
+    .ss-ghost.is-sad .ss-ghost-sad {{ display: block; }}
+    .ss-ghost.is-sad {{
+      animation: ss-float-sad 4s ease-in-out infinite;
+    }}
+
+    @keyframes ss-float-sad {{
+      0%, 100% {{ transform: translateY(0) rotate(0deg); }}
+      50% {{ transform: translateY(-5px) rotate(-1deg); }}
+    }}
+
+    /* Speech bubble */
+    .ss-bubble {{
+      position: absolute;
+      top: -14px;
+      left: calc(100% + 10px);
+      width: max-content;
+      max-width: 200px;
+      padding: 8px 12px;
+      font-size: 0.72rem;
+      font-weight: 520;
+      line-height: 1.35;
+      color: var(--text);
+      background: var(--surface-2);
+      border: 1px solid var(--border-2);
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.15);
+      opacity: 0;
+      transform: translateY(6px) scale(0.95);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+      pointer-events: none;
+      z-index: 2;
+      white-space: normal;
+    }}
+    .ss-bubble::before {{
+      content: '';
+      position: absolute;
+      left: -6px;
+      top: 18px;
+      width: 10px;
+      height: 10px;
+      background: var(--surface-2);
+      border-left: 1px solid var(--border-2);
+      border-bottom: 1px solid var(--border-2);
+      transform: rotate(45deg);
+    }}
+    .ss-bubble.is-visible {{
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }}
+
+    /* Flying ghost overlay */
+    .ss-flyer {{
+      display: none;
+      position: fixed;
+      z-index: 10000;
+      width: 64px;
+      height: 80px;
+      pointer-events: none;
+      color: var(--ss-ghost);
+      filter: drop-shadow(0 0 20px rgba(139,92,246,.5)) drop-shadow(0 0 40px rgba(139,92,246,.2));
+      transform: translate(-50%, -50%);
+      will-change: left, top, transform, opacity;
+    }}
+    .ss-flyer svg {{
+      width: 100%;
+      height: 100%;
+    }}
     @keyframes ss-float {{
       0%, 100% {{ transform: translateY(0) rotate(0deg); }}
       15% {{ transform: translateY(-8px) rotate(-2deg); }}
@@ -2447,6 +2617,8 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .ss-sub {{ animation: none !important; opacity: 0.6 !important; }}
       .ss-glow-border {{ animation: none !important; }}
       .ss-wisps {{ display: none !important; }}
+      .ss-flyer {{ display: none !important; }}
+      .ss-bubble {{ opacity: 1 !important; transform: none !important; }}
     }}
 
     @media (max-width: 480px) {{
@@ -2455,18 +2627,24 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .ss-text {{ font-size: 1.1rem; gap: 1px; }}
       .ss-space {{ width: 5px; }}
       .ss-sub {{ font-size: 0.68rem; margin-top: 8px; }}
+      .ss-bubble {{ left: 50%; top: auto; bottom: calc(100% + 8px); transform-origin: bottom center; max-width: 170px; font-size: 0.65rem; }}
+      .ss-bubble::before {{ left: 50%; top: auto; bottom: -6px; transform: translateX(-50%) rotate(-45deg); }}
+      .ss-bubble.is-visible {{ transform: translateX(-50%) translateY(0) scale(1); }}
+      .ss-flyer {{ width: 48px; height: 60px; }}
     }}
     @media (min-width: 481px) and (max-width: 700px) {{
       .sunday-banner {{ padding: 32px 24px 26px; }}
       .ss-ghost {{ width: 50px; height: 62px; }}
       .ss-text {{ font-size: 1.4rem; }}
       .ss-sub {{ font-size: 0.75rem; }}
+      .ss-flyer {{ width: 56px; height: 70px; }}
     }}
     @media (min-width: 900px) {{
       .sunday-banner {{ padding: 40px 32px 34px; margin: -8px 0 36px; }}
       .ss-ghost {{ width: 64px; height: 80px; }}
       .ss-text {{ font-size: 1.9rem; }}
       .ss-sub {{ font-size: 0.85rem; margin-top: 12px; }}
+      .ss-flyer {{ width: 72px; height: 90px; }}
     }}
   </style>
 </head>
@@ -2497,7 +2675,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       <div class="ss-glow-border"></div>
       <div class="ss-wisps" id="sunday-wisps"></div>
       <div class="ss-ghost" aria-hidden="true">
-        <svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg class="ss-ghost-normal" viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M40 8C22.3 8 8 22.3 8 40v30c0 2 0.5 3.8 1.2 5.2L16 68l8 8 8-8 8 8 8-8 8 8 8-8 6.8 7.2c0.7-1.4 1.2-3.2 1.2-5.2V40c8 0-14.3-32-32-32z" fill="currentColor" opacity="0.9"/>
           <ellipse cx="28" cy="40" rx="5" ry="6" fill="var(--bg)" opacity="0.85"/>
           <ellipse cx="52" cy="40" rx="5" ry="6" fill="var(--bg)" opacity="0.85"/>
@@ -2505,6 +2683,17 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
           <ellipse cx="52" cy="41" rx="3" ry="4" fill="var(--ss-eye)"/>
           <ellipse cx="40" cy="54" rx="4" ry="3" fill="var(--bg)" opacity="0.5"/>
         </svg>
+        <svg class="ss-ghost-sad" viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M40 8C22.3 8 8 22.3 8 40v30c0 2 0.5 3.8 1.2 5.2L16 68l8 8 8-8 8 8 8-8 8 8 8-8 6.8 7.2c0.7-1.4 1.2-3.2 1.2-5.2V40c8 0-14.3-32-32-32z" fill="currentColor" opacity="0.9"/>
+          <ellipse cx="28" cy="40" rx="5" ry="6" fill="var(--bg)" opacity="0.85"/>
+          <ellipse cx="52" cy="40" rx="5" ry="6" fill="var(--bg)" opacity="0.85"/>
+          <ellipse cx="28" cy="42" rx="3" ry="3.5" fill="var(--ss-eye)"/>
+          <ellipse cx="52" cy="42" rx="3" ry="3.5" fill="var(--ss-eye)"/>
+          <line x1="25" y1="34" x2="31" y2="36" stroke="var(--ss-eye)" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="55" y1="34" x2="49" y2="36" stroke="var(--ss-eye)" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M33 56 Q40 52 47 56" stroke="var(--bg)" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.6"/>
+        </svg>
+        <div class="ss-bubble" id="ss-bubble">so much for the weekend&hellip; back to the work grind!</div>
       </div>
       <span class="ss-text" id="sunday-text"></span>
       <span class="ss-sub">Tomorrow is Monday&hellip;</span>
@@ -2514,6 +2703,16 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       Live data &middot; Powered by Cloudflare&nbsp;Pages
     </footer>
   </main>
+  <div id="ss-flyer" class="ss-flyer" aria-hidden="true">
+    <svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M40 8C22.3 8 8 22.3 8 40v30c0 2 0.5 3.8 1.2 5.2L16 68l8 8 8-8 8 8 8-8 8 8 8-8 6.8 7.2c0.7-1.4 1.2-3.2 1.2-5.2V40c8 0-14.3-32-32-32z" fill="currentColor" opacity="0.9"/>
+      <ellipse cx="28" cy="40" rx="5" ry="6" fill="var(--bg)" opacity="0.85"/>
+      <ellipse cx="52" cy="40" rx="5" ry="6" fill="var(--bg)" opacity="0.85"/>
+      <ellipse cx="28" cy="41" rx="3" ry="4" fill="var(--ss-eye)"/>
+      <ellipse cx="52" cy="41" rx="3" ry="4" fill="var(--ss-eye)"/>
+      <ellipse cx="40" cy="54" rx="4" ry="3" fill="var(--bg)" opacity="0.5"/>
+    </svg>
+  </div>
   <button class="theme-toggle" aria-label="Toggle light/dark mode" title="Toggle theme">
     <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
     <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
