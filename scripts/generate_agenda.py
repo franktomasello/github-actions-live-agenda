@@ -14,6 +14,8 @@ from urllib.request import Request, urlopen
 from icalendar import Calendar
 from zoneinfo import ZoneInfo
 
+import recurring_ical_events
+
 # ── Client-side renderer ──────────────────────────────────────────────────────
 # Raw string so normal JS braces don't need escaping in the f-string template.
 _RENDER_JS = r"""
@@ -681,7 +683,8 @@ def parse_events(raw: bytes, tz: ZoneInfo) -> list[Event]:
     window_end = now + timedelta(hours=WINDOW_HOURS)
     events: list[Event] = []
 
-    for component in cal.walk("VEVENT"):
+    # recurring_ical_events expands RRULEs, handles EXDATE/RECURRENCE-ID
+    for component in recurring_ical_events.of(cal).between(now, window_end):
         status = str(component.get("STATUS", "")).upper()
         if status == "CANCELLED":
             continue
@@ -696,9 +699,6 @@ def parse_events(raw: bytes, tz: ZoneInfo) -> list[Event]:
             end = start + (timedelta(days=1) if is_all_day else timedelta(hours=1))
         else:
             end, _ = ensure_dt(raw_end.dt, tz)
-
-        if end < now or start > window_end:
-            continue
 
         events.append(
             Event(

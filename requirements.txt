@@ -1,1 +1,2 @@
 icalendar>=6.0.0
+recurring-ical-events>=3.0.0
