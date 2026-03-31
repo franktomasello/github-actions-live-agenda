@@ -698,16 +698,16 @@ _RENDER_JS = r"""
 
     // ── Catmull-Rom spline for organic ghost flight ──────────────────────
     var pts = [
-      {{ x: startX,    y: startY    }},
-      {{ x: vw * 0.70, y: vh * 0.08 }},
-      {{ x: vw * 0.85, y: vh * 0.35 }},
-      {{ x: vw * 0.55, y: vh * 0.52 }},
-      {{ x: vw * 0.20, y: vh * 0.25 }},
-      {{ x: vw * 0.10, y: vh * 0.55 }},
-      {{ x: vw * 0.45, y: vh * 0.15 }},
+      { x: startX,    y: startY    },
+      { x: vw * 0.70, y: vh * 0.08 },
+      { x: vw * 0.85, y: vh * 0.35 },
+      { x: vw * 0.55, y: vh * 0.52 },
+      { x: vw * 0.20, y: vh * 0.25 },
+      { x: vw * 0.10, y: vh * 0.55 },
+      { x: vw * 0.45, y: vh * 0.15 },
     ];
 
-    function catmullRom(p0, p1, p2, p3, t) {{
+    function catmullRom(p0, p1, p2, p3, t) {
       var t2 = t * t, t3 = t2 * t;
       return 0.5 * (
         (2 * p1) +
@@ -715,9 +715,9 @@ _RENDER_JS = r"""
         (2*p0 - 5*p1 + 4*p2 - p3) * t2 +
         (-p0 + 3*p1 - 3*p2 + p3) * t3
       );
-    }}
+    }
 
-    function samplePath(t) {{
+    function samplePath(t) {
       var n = pts.length - 1;
       var seg = t * n;
       var i = Math.min(Math.floor(seg), n - 1);
@@ -726,11 +726,11 @@ _RENDER_JS = r"""
       var p1 = pts[i];
       var p2 = pts[Math.min(i + 1, n)];
       var p3 = pts[Math.min(i + 2, n)];
-      return {{
+      return {
         x: catmullRom(p0.x, p1.x, p2.x, p3.x, lt),
         y: catmullRom(p0.y, p1.y, p2.y, p3.y, lt),
-      }};
-    }}
+      };
+    }
 
     // ── Timing: 12s total ────────────────────────────────────────────────
     // Phase 1  Ghost flight:   0.000 – 0.417  (0–5s)
@@ -755,19 +755,19 @@ _RENDER_JS = r"""
     var packX = 0, packY = 0;
     var burstFired = false;
 
-    function clampX(x) {{ return Math.max(vw * 0.04, Math.min(vw * 0.96, x)); }}
-    function clampY(y) {{ return Math.max(vh * 0.04, Math.min(vh * 0.96, y)); }}
+    function clampX(x) { return Math.max(vw * 0.04, Math.min(vw * 0.96, x)); }
+    function clampY(y) { return Math.max(vh * 0.04, Math.min(vh * 0.96, y)); }
 
-    function easeOutCubic(t) {{ return 1 - Math.pow(1 - t, 3); }}
+    function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 
-    function animate(now) {{
+    function animate(now) {
       var elapsed = now - startTime;
       var rawT = Math.min(elapsed / FLIGHT_MS, 1);
 
       var cx, cy, gScale, gOpacity, gAngle;
 
       // ── Phase 1: Ghost Free Flight (0 – 0.417) ────────────────────────
-      if (rawT <= 0.417) {{
+      if (rawT <= 0.417) {
         var freeT = rawT / 0.417;
         var eased = freeT < 0.5 ? 4*freeT*freeT*freeT : 1 - Math.pow(-2*freeT+2, 3)/2;
         var pos = samplePath(eased);
@@ -781,14 +781,14 @@ _RENDER_JS = r"""
         ghostSpringY = cy;
 
       // ── Phase 3: Beam Lock + Spring Capture (0.417 – 0.667) ───────────
-      }} else if (rawT <= 0.667) {{
-        if (!captureStarted) {{
+      } else if (rawT <= 0.667) {
+        if (!captureStarted) {
           captureStarted = true;
           ghostSpringX = prevGX;
           ghostSpringY = prevGY;
           ghostVelX = 0;
           ghostVelY = 0;
-        }}
+        }
         var capT = (rawT - 0.417) / (0.667 - 0.417);
 
         // Spring physics: pull toward buster with increasing force
@@ -810,25 +810,25 @@ _RENDER_JS = r"""
         packY = busterY;
 
       // ── Phase 4: Pack Struggle + Break Free (0.667 – 0.833) ───────────
-      }} else if (rawT <= 0.833) {{
+      } else if (rawT <= 0.833) {
         var breakT = (rawT - 0.667) / (0.833 - 0.667);
 
-        if (breakT < 0.40) {{
+        if (breakT < 0.40) {
           // Ghost hidden at pack, pack shaking
           cx = packX;
           cy = packY;
           gScale = 0.01;
           gOpacity = 0;
-        }} else {{
+        } else {
           // Ghost erupts from pack
           var eruptT = (breakT - 0.40) / 0.60;
-          if (!burstFired && burst) {{
+          if (!burstFired && burst) {
             burstFired = true;
             burst.style.left = packX + 'px';
             burst.style.top  = packY + 'px';
             burst.classList.add('is-active');
-            setTimeout(function () {{ burst.classList.remove('is-active'); }}, 500);
-          }}
+            setTimeout(function () { burst.classList.remove('is-active'); }, 500);
+          }
           var ease = easeOutCubic(eruptT);
           cx = clampX(packX + (startX - packX) * ease);
           cy = clampY(packY + (startY - packY) * ease);
@@ -838,15 +838,15 @@ _RENDER_JS = r"""
           // Flickering escape
           var flicker = 0.3 + Math.abs(Math.sin(eruptT * Math.PI * 10)) * 0.5;
           gOpacity = Math.min(1, flicker + eruptT * 0.3);
-        }}
+        }
 
       // ── Phase 5: Aftermath (0.833 – 1.0) ──────────────────────────────
-      }} else {{
+      } else {
         cx = startX;
         cy = startY;
         gScale = 1;
         gOpacity = rawT < 0.92 ? 1 : Math.max(0, 1 - (rawT - 0.92) / 0.08);
-      }}
+      }
 
       // Direction tilt
       var dx = cx - prevGX, dy = cy - prevGY;
@@ -861,27 +861,27 @@ _RENDER_JS = r"""
       flyer.style.opacity   = Math.max(0, Math.min(1, gOpacity)).toFixed(3);
 
       // ── Buster & Beam Logic ────────────────────────────────────────────
-      if (buster && beam) {{
+      if (buster && beam) {
 
         // Phase 2: Buster enters and chases (0.208 – 0.500)
-        if (rawT >= 0.208 && rawT <= 0.500) {{
-          if (!busterActive) {{
+        if (rawT >= 0.208 && rawT <= 0.500) {
+          if (!busterActive) {
             busterActive = true;
             buster.style.display = 'block';
             buster.style.opacity = '0';
-          }}
+          }
           // Weighted pursuit — heavy, purposeful movement
           busterX += (cx - busterX) * 0.025;
           busterY += (cy - busterY) * 0.025;
-        }}
+        }
 
         // Continue pursuit during capture phase
-        if (rawT > 0.500 && rawT <= 0.667) {{
+        if (rawT > 0.500 && rawT <= 0.667) {
           busterX += (cx - busterX) * 0.01;
           busterY += (cy - busterY) * 0.01;
-        }}
+        }
 
-        if (busterActive && rawT < 0.833) {{
+        if (busterActive && rawT < 0.833) {
           // Determine facing direction
           var bFlip = cx >= busterX ? 1 : -1;
 
@@ -892,10 +892,10 @@ _RENDER_JS = r"""
 
           // Pack-shake during struggle (0.667 – 0.73)
           var shakeOff = 0;
-          if (rawT >= 0.667 && rawT < 0.73) {{
+          if (rawT >= 0.667 && rawT < 0.73) {
             var shakeT = (rawT - 0.667) / 0.063;
             shakeOff = Math.sin(shakeT * Math.PI * 40) * 6 * (1 - shakeT * 0.5);
-          }}
+          }
 
           // Shocked recoil when ghost escapes
           var bScale = (rawT >= 0.73 && rawT < 0.833) ? 1.1 : 1;
@@ -917,24 +917,24 @@ _RENDER_JS = r"""
           var isCapturing = rawT > 0.500 && rawT <= 0.667;
           var inRange = beamDist < vw * 0.45 && bOpacity > 0.2;
 
-          if (inRange || isCapturing) {{
+          if (inRange || isCapturing) {
             beam.style.display   = 'block';
             beam.style.left      = wandTipX + 'px';
             beam.style.top       = wandTipY + 'px';
             beam.style.width     = Math.max(4, beamDist) + 'px';
             beam.style.transform = 'rotate(' + beamAngle.toFixed(1) + 'deg)';
             beam.style.opacity   = (bOpacity * (isCapturing ? 1 : 0.65)).toFixed(3);
-            if (isCapturing) {{
+            if (isCapturing) {
               beam.classList.add('is-locked');
-            }} else {{
+            } else {
               beam.classList.remove('is-locked');
-            }}
-          }} else {{
+            }
+          } else {
             beam.style.display = 'none';
             beam.classList.remove('is-locked');
-          }}
+          }
 
-        }} else if (rawT >= 0.833 && busterActive) {{
+        } else if (rawT >= 0.833 && busterActive) {
           // Head-shake disappointment, then fade out
           var fadeT = Math.min((rawT - 0.833) / 0.12, 1);
           var headShake = Math.sin(fadeT * Math.PI * 7) * (1 - fadeT) * 8;
@@ -942,26 +942,26 @@ _RENDER_JS = r"""
           buster.style.opacity   = Math.max(0, 1 - fadeT * 1.4).toFixed(3);
           beam.style.display     = 'none';
           beam.classList.remove('is-locked');
-          if (fadeT >= 1) {{
+          if (fadeT >= 1) {
             buster.style.display = 'none';
             busterActive = false;
-          }}
-        }}
-      }}
+          }
+        }
+      }
 
-      if (rawT < 1) {{
+      if (rawT < 1) {
         requestAnimationFrame(animate);
-      }} else {{
+      } else {
         flyer.style.display = 'none';
         if (buster) buster.style.display = 'none';
-        if (beam)   {{ beam.style.display = 'none'; beam.classList.remove('is-locked'); }}
+        if (beam)   { beam.style.display = 'none'; beam.classList.remove('is-locked'); }
         ghost.style.visibility = 'visible';
         ghost.classList.add('is-sad');
-        if (bubble) {{
-          setTimeout(function () {{ bubble.classList.add('is-visible'); }}, 600);
-        }}
-      }}
-    }}
+        if (bubble) {
+          setTimeout(function () { bubble.classList.add('is-visible'); }, 600);
+        }
+      }
+    }
 
     requestAnimationFrame(animate);
   }
