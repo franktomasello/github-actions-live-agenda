@@ -272,6 +272,18 @@ function expandRRule(ruleStr, dtStart, duration, isAllDay, windowStart, windowEn
   let generated = 0;
   const hardLimit = 1000;
 
+  // Derive original LOCAL time so each occurrence stays at the same wall-clock
+  // time across DST boundaries (e.g. 9 AM stays 9 AM in both PST and PDT).
+  let _localH = 0, _localM = 0, _localS = 0;
+  if (!isAllDay) {
+    const _p = getFmt(defaultTz).formatToParts(dtStart);
+    for (const part of _p) {
+      if (part.type === 'hour')   _localH = +part.value % 24;
+      if (part.type === 'minute') _localM = +part.value;
+      if (part.type === 'second') _localS = +part.value;
+    }
+  }
+
   // Iterate by advancing a candidate date according to FREQ+INTERVAL
   let cursor = new Date(dtStart.getTime());
 
@@ -359,14 +371,29 @@ function expandRRule(ruleStr, dtStart, duration, isAllDay, windowStart, windowEn
 
     for (const cand of candidates) {
       if (generated >= count) break;
-      if (until && cand > until) return occurrences;
-      if (cand < dtStart) continue;
-      if (cand > windowEnd) return occurrences;
 
-      if (cand >= windowStart && !exdates.has(cand.getTime())) {
+      // DST-correct: re-derive UTC from the candidate's local date + original
+      // local time so the wall-clock hour stays constant across DST changes.
+      let adj = cand;
+      if (!isAllDay) {
+        const cp = getFmt(defaultTz).formatToParts(cand);
+        let cy = 0, cmo = 0, cd = 0;
+        for (const p of cp) {
+          if (p.type === 'year')  cy  = +p.value;
+          if (p.type === 'month') cmo = +p.value - 1;
+          if (p.type === 'day')   cd  = +p.value;
+        }
+        adj = localToUTC(cy, cmo, cd, _localH, _localM, _localS, defaultTz);
+      }
+
+      if (until && adj > until) return occurrences;
+      if (adj < dtStart) continue;
+      if (adj > windowEnd) return occurrences;
+
+      if (adj >= windowStart && !exdates.has(adj.getTime())) {
         occurrences.push({
-          start: new Date(cand.getTime()),
-          end:   new Date(cand.getTime() + duration),
+          start: new Date(adj.getTime()),
+          end:   new Date(adj.getTime() + duration),
         });
       }
       generated++;
