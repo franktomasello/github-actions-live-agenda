@@ -613,7 +613,6 @@ _RENDER_JS = r"""
 
   // ── Sunday Scaries Banner (all day Sunday) ──────────────────────────────────
   var _sundayInitialized = false;
-  var _sundayFlightDone  = false;
 
   function updateSundayScaries() {
     var fmt = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'long' });
@@ -669,301 +668,11 @@ _RENDER_JS = r"""
     banner.style.display = 'flex';
     banner.setAttribute('aria-hidden', 'false');
 
-    // Trigger ghost flight once on first load
-    if (!_sundayFlightDone) {
-      _sundayFlightDone = true;
-      setTimeout(startGhostFlight, 1200);
+    // Show speech bubble after a short delay
+    var bubble = document.getElementById('ss-bubble');
+    if (bubble && !bubble.classList.contains('is-visible')) {
+      setTimeout(function () { bubble.classList.add('is-visible'); }, 1200);
     }
-  }
-
-  function startGhostFlight() {
-    var ghost   = document.querySelector('.ss-ghost');
-    var flyer   = document.getElementById('ss-flyer');
-    var bubble  = document.getElementById('ss-bubble');
-    var buster  = document.getElementById('ss-buster');
-    var beam    = document.getElementById('ss-beam');
-    var burst   = document.getElementById('ss-burst');
-    if (!ghost || !flyer) return;
-
-    var rect = ghost.getBoundingClientRect();
-    var startX = rect.left + rect.width / 2;
-    var startY = rect.top  + rect.height / 2;
-
-    flyer.style.left = startX + 'px';
-    flyer.style.top  = startY + 'px';
-    flyer.style.display = 'block';
-    ghost.style.visibility = 'hidden';
-
-    var vw = window.innerWidth, vh = window.innerHeight;
-
-    // ── Catmull-Rom spline for organic ghost flight ──────────────────────
-    var pts = [
-      { x: startX,    y: startY    },
-      { x: vw * 0.70, y: vh * 0.08 },
-      { x: vw * 0.85, y: vh * 0.35 },
-      { x: vw * 0.55, y: vh * 0.52 },
-      { x: vw * 0.20, y: vh * 0.25 },
-      { x: vw * 0.10, y: vh * 0.55 },
-      { x: vw * 0.45, y: vh * 0.15 },
-    ];
-
-    function catmullRom(p0, p1, p2, p3, t) {
-      var t2 = t * t, t3 = t2 * t;
-      return 0.5 * (
-        (2 * p1) +
-        (-p0 + p2) * t +
-        (2*p0 - 5*p1 + 4*p2 - p3) * t2 +
-        (-p0 + 3*p1 - 3*p2 + p3) * t3
-      );
-    }
-
-    function samplePath(t) {
-      var n = pts.length - 1;
-      var seg = t * n;
-      var i = Math.min(Math.floor(seg), n - 1);
-      var lt = seg - i;
-      var p0 = pts[Math.max(i - 1, 0)];
-      var p1 = pts[i];
-      var p2 = pts[Math.min(i + 1, n)];
-      var p3 = pts[Math.min(i + 2, n)];
-      return {
-        x: catmullRom(p0.x, p1.x, p2.x, p3.x, lt),
-        y: catmullRom(p0.y, p1.y, p2.y, p3.y, lt),
-      };
-    }
-
-    // ── Timing: 12s total ────────────────────────────────────────────────
-    // Phase 1  Ghost flight:   0.000 – 0.417  (0–5s)
-    // Phase 2  Buster enters:  0.208 – 0.500  (2.5–6s)
-    // Phase 3  Beam + capture: 0.500 – 0.667  (6–8s)
-    // Phase 4  Break free:     0.667 – 0.833  (8–10s)
-    // Phase 5  Aftermath:      0.833 – 1.000  (10–12s)
-    var FLIGHT_MS = 12000;
-    var startTime = performance.now();
-    var prevGX = startX, prevGY = startY;
-
-    // Buster state — starts off-screen bottom-right
-    var busterX = vw + 50, busterY = vh * 0.80;
-    var busterActive = false;
-
-    // Ghost spring-physics velocity (used during capture phase)
-    var ghostVelX = 0, ghostVelY = 0;
-    var ghostSpringX = 0, ghostSpringY = 0;
-    var captureStarted = false;
-
-    // Snapshot positions at phase boundaries
-    var packX = 0, packY = 0;
-    var burstFired = false;
-
-    function clampX(x) { return Math.max(vw * 0.04, Math.min(vw * 0.96, x)); }
-    function clampY(y) { return Math.max(vh * 0.04, Math.min(vh * 0.96, y)); }
-
-    function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
-
-    function animate(now) {
-      var elapsed = now - startTime;
-      var rawT = Math.min(elapsed / FLIGHT_MS, 1);
-
-      var cx, cy, gScale, gOpacity, gAngle;
-
-      // ── Phase 1: Ghost Free Flight (0 – 0.417) ────────────────────────
-      if (rawT <= 0.417) {
-        var freeT = rawT / 0.417;
-        var eased = freeT < 0.5 ? 4*freeT*freeT*freeT : 1 - Math.pow(-2*freeT+2, 3)/2;
-        var pos = samplePath(eased);
-        var bob = Math.sin(rawT * Math.PI * 8) * 5;
-        cx = clampX(pos.x);
-        cy = clampY(pos.y + bob);
-        gScale = 1 + Math.sin(rawT * Math.PI * 5) * 0.05;
-        gOpacity = rawT < 0.05 ? rawT / 0.05 : 1;
-        // Init spring position to track ghost
-        ghostSpringX = cx;
-        ghostSpringY = cy;
-
-      // ── Phase 3: Beam Lock + Spring Capture (0.417 – 0.667) ───────────
-      } else if (rawT <= 0.667) {
-        if (!captureStarted) {
-          captureStarted = true;
-          ghostSpringX = prevGX;
-          ghostSpringY = prevGY;
-          ghostVelX = 0;
-          ghostVelY = 0;
-        }
-        var capT = (rawT - 0.417) / (0.667 - 0.417);
-
-        // Spring physics: pull toward buster with increasing force
-        var pullX = busterX - ghostSpringX;
-        var pullY = busterY - ghostSpringY;
-        var pullStrength = 0.001 + capT * capT * 0.012;
-        ghostVelX += pullX * pullStrength;
-        ghostVelY += pullY * pullStrength;
-        ghostVelX *= 0.92;
-        ghostVelY *= 0.92;
-        ghostSpringX += ghostVelX;
-        ghostSpringY += ghostVelY;
-
-        cx = clampX(ghostSpringX);
-        cy = clampY(ghostSpringY);
-        gScale = Math.max(0.02, 1 - capT * 0.98);
-        gOpacity = Math.max(0, 1 - capT * capT * 1.5);
-        packX = busterX;
-        packY = busterY;
-
-      // ── Phase 4: Pack Struggle + Break Free (0.667 – 0.833) ───────────
-      } else if (rawT <= 0.833) {
-        var breakT = (rawT - 0.667) / (0.833 - 0.667);
-
-        if (breakT < 0.40) {
-          // Ghost hidden at pack, pack shaking
-          cx = packX;
-          cy = packY;
-          gScale = 0.01;
-          gOpacity = 0;
-        } else {
-          // Ghost erupts from pack
-          var eruptT = (breakT - 0.40) / 0.60;
-          if (!burstFired && burst) {
-            burstFired = true;
-            burst.style.left = packX + 'px';
-            burst.style.top  = packY + 'px';
-            burst.classList.add('is-active');
-            setTimeout(function () { burst.classList.remove('is-active'); }, 500);
-          }
-          var ease = easeOutCubic(eruptT);
-          cx = clampX(packX + (startX - packX) * ease);
-          cy = clampY(packY + (startY - packY) * ease);
-          // Overshoot: scale goes 0.2 → 1.2 → 1.0
-          var rawScale = 0.2 + eruptT * 1.0;
-          gScale = eruptT < 0.7 ? rawScale : 1.0 + (1.2 - 1.0) * (1 - easeOutCubic((eruptT - 0.7) / 0.3));
-          // Flickering escape
-          var flicker = 0.3 + Math.abs(Math.sin(eruptT * Math.PI * 10)) * 0.5;
-          gOpacity = Math.min(1, flicker + eruptT * 0.3);
-        }
-
-      // ── Phase 5: Aftermath (0.833 – 1.0) ──────────────────────────────
-      } else {
-        cx = startX;
-        cy = startY;
-        gScale = 1;
-        gOpacity = rawT < 0.92 ? 1 : Math.max(0, 1 - (rawT - 0.92) / 0.08);
-      }
-
-      // Direction tilt
-      var dx = cx - prevGX, dy = cy - prevGY;
-      gAngle = Math.atan2(dy, dx) * (180 / Math.PI);
-      gAngle = Math.max(-25, Math.min(25, gAngle * 0.35));
-      prevGX = cx;
-      prevGY = cy;
-
-      flyer.style.left      = cx + 'px';
-      flyer.style.top       = cy + 'px';
-      flyer.style.transform = 'translate(-50%,-50%) rotate(' + gAngle.toFixed(1) + 'deg) scale(' + gScale.toFixed(3) + ')';
-      flyer.style.opacity   = Math.max(0, Math.min(1, gOpacity)).toFixed(3);
-
-      // ── Buster & Beam Logic ────────────────────────────────────────────
-      if (buster && beam) {
-
-        // Phase 2: Buster enters and chases (0.208 – 0.500)
-        if (rawT >= 0.208 && rawT <= 0.500) {
-          if (!busterActive) {
-            busterActive = true;
-            buster.style.display = 'block';
-            buster.style.opacity = '0';
-          }
-          // Weighted pursuit — heavy, purposeful movement
-          busterX += (cx - busterX) * 0.025;
-          busterY += (cy - busterY) * 0.025;
-        }
-
-        // Continue pursuit during capture phase
-        if (rawT > 0.500 && rawT <= 0.667) {
-          busterX += (cx - busterX) * 0.01;
-          busterY += (cy - busterY) * 0.01;
-        }
-
-        if (busterActive && rawT < 0.833) {
-          // Determine facing direction
-          var bFlip = cx >= busterX ? 1 : -1;
-
-          // Buster opacity — fade in over 0.208–0.28
-          var bOpacity = 1;
-          if (rawT < 0.28) bOpacity = (rawT - 0.208) / 0.072;
-          bOpacity = Math.max(0, Math.min(1, bOpacity));
-
-          // Pack-shake during struggle (0.667 – 0.73)
-          var shakeOff = 0;
-          if (rawT >= 0.667 && rawT < 0.73) {
-            var shakeT = (rawT - 0.667) / 0.063;
-            shakeOff = Math.sin(shakeT * Math.PI * 40) * 6 * (1 - shakeT * 0.5);
-          }
-
-          // Shocked recoil when ghost escapes
-          var bScale = (rawT >= 0.73 && rawT < 0.833) ? 1.1 : 1;
-
-          buster.style.left      = (busterX + shakeOff).toFixed(1) + 'px';
-          buster.style.top       = busterY.toFixed(1) + 'px';
-          buster.style.transform = 'translate(-50%,-50%) scaleX(' + (bFlip * bScale).toFixed(2) + ') scaleY(' + bScale.toFixed(2) + ')';
-          buster.style.opacity   = bOpacity.toFixed(3);
-
-          // ── Beam: connects wand tip to ghost ──────────────────────────
-          // Wand tip offset relative to buster center (matches SVG geometry)
-          var wandTipX = busterX + 30 * bFlip;
-          var wandTipY = busterY - 25;
-
-          var beamDx = cx - wandTipX;
-          var beamDy = cy - wandTipY;
-          var beamDist = Math.sqrt(beamDx * beamDx + beamDy * beamDy);
-          var beamAngle = Math.atan2(beamDy, beamDx) * (180 / Math.PI);
-          var isCapturing = rawT > 0.500 && rawT <= 0.667;
-          var inRange = beamDist < vw * 0.45 && bOpacity > 0.2;
-
-          if (inRange || isCapturing) {
-            beam.style.display   = 'block';
-            beam.style.left      = wandTipX + 'px';
-            beam.style.top       = wandTipY + 'px';
-            beam.style.width     = Math.max(4, beamDist) + 'px';
-            beam.style.transform = 'rotate(' + beamAngle.toFixed(1) + 'deg)';
-            beam.style.opacity   = (bOpacity * (isCapturing ? 1 : 0.65)).toFixed(3);
-            if (isCapturing) {
-              beam.classList.add('is-locked');
-            } else {
-              beam.classList.remove('is-locked');
-            }
-          } else {
-            beam.style.display = 'none';
-            beam.classList.remove('is-locked');
-          }
-
-        } else if (rawT >= 0.833 && busterActive) {
-          // Head-shake disappointment, then fade out
-          var fadeT = Math.min((rawT - 0.833) / 0.12, 1);
-          var headShake = Math.sin(fadeT * Math.PI * 7) * (1 - fadeT) * 8;
-          buster.style.transform = 'translate(-50%,-50%) translateX(' + headShake.toFixed(1) + 'px)';
-          buster.style.opacity   = Math.max(0, 1 - fadeT * 1.4).toFixed(3);
-          beam.style.display     = 'none';
-          beam.classList.remove('is-locked');
-          if (fadeT >= 1) {
-            buster.style.display = 'none';
-            busterActive = false;
-          }
-        }
-      }
-
-      if (rawT < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        flyer.style.display = 'none';
-        if (buster) buster.style.display = 'none';
-        if (beam)   { beam.style.display = 'none'; beam.classList.remove('is-locked'); }
-        ghost.style.visibility = 'visible';
-        ghost.classList.add('is-sad');
-        if (bubble) {
-          setTimeout(function () { bubble.classList.add('is-visible'); }, 600);
-        }
-      }
-    }
-
-    requestAnimationFrame(animate);
   }
 })();
 """
@@ -2484,24 +2193,10 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     :root {{
       --ss-eye: #8b5cf6;
       --ss-ghost: rgba(167,139,250,0.85);
-      --ss-buster-suit: #c4a882;
-      --ss-buster-pack: #555;
-      --ss-buster-detail: #888;
-      --ss-buster-skin: #f0c8a0;
-      --ss-buster-hair: #4a3728;
-      --ss-buster-boot: #333;
-      --ss-buster-wand: #777;
     }}
     [data-theme="light"] {{
       --ss-eye: #6d28d9;
       --ss-ghost: rgba(139,92,246,0.9);
-      --ss-buster-suit: #b89968;
-      --ss-buster-pack: #444;
-      --ss-buster-detail: #666;
-      --ss-buster-skin: #e8b888;
-      --ss-buster-hair: #3a2718;
-      --ss-buster-boot: #222;
-      --ss-buster-wand: #666;
     }}
 
     .sunday-banner {{
@@ -2653,18 +2348,6 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       width: 100%;
       height: 100%;
     }}
-    .ss-ghost-sad {{ display: none; }}
-    .ss-ghost.is-sad .ss-ghost-normal {{ display: none; }}
-    .ss-ghost.is-sad .ss-ghost-sad {{ display: block; }}
-    .ss-ghost.is-sad {{
-      animation: ss-float-sad 4s ease-in-out infinite;
-    }}
-
-    @keyframes ss-float-sad {{
-      0%, 100% {{ transform: translateY(0) rotate(0deg); }}
-      50% {{ transform: translateY(-5px) rotate(-1deg); }}
-    }}
-
     /* Speech bubble */
     .ss-bubble {{
       position: absolute;
@@ -2703,92 +2386,6 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     .ss-bubble.is-visible {{
       opacity: 1;
       transform: translateY(0) scale(1);
-    }}
-
-    /* Flying ghost overlay */
-    .ss-flyer {{
-      display: none;
-      position: fixed;
-      z-index: 10000;
-      width: 64px;
-      height: 80px;
-      pointer-events: none;
-      color: var(--ss-ghost);
-      filter: drop-shadow(0 0 20px rgba(139,92,246,.5)) drop-shadow(0 0 40px rgba(139,92,246,.2));
-      transform: translate(-50%, -50%);
-      will-change: left, top, transform, opacity;
-    }}
-    .ss-flyer svg {{
-      width: 100%;
-      height: 100%;
-    }}
-
-    /* Ghostbuster overlay */
-    .ss-buster {{
-      display: none;
-      position: fixed;
-      z-index: 9999;
-      width: 64px;
-      height: 80px;
-      pointer-events: none;
-      transform: translate(-50%, -50%);
-      will-change: left, top, transform, opacity;
-      filter: drop-shadow(0 2px 6px rgba(0,0,0,.25));
-    }}
-    .ss-buster svg {{
-      width: 100%;
-      height: 100%;
-    }}
-    /* Proton beam */
-    .ss-beam {{
-      display: none;
-      position: fixed;
-      z-index: 9998;
-      height: 3px;
-      pointer-events: none;
-      transform-origin: 0 50%;
-      background: linear-gradient(90deg, #ff9f0a 0%, rgba(255,204,2,0.85) 50%, rgba(255,159,10,0.3) 85%, transparent 100%);
-      box-shadow: 0 0 6px 2px rgba(255,159,10,0.45);
-      border-radius: 1.5px;
-      will-change: left, top, width, transform, opacity;
-      animation: ss-beam-pulse 0.12s ease-in-out infinite alternate;
-    }}
-    @keyframes ss-beam-pulse {{
-      0% {{ opacity: 0.7; }}
-      100% {{ opacity: 1; }}
-    }}
-    .ss-beam.is-locked {{
-      height: 6px;
-      border-radius: 3px;
-      background: linear-gradient(90deg, #ff4500 0%, #ff9f0a 35%, rgba(255,220,50,0.9) 65%, rgba(255,159,10,0.4) 90%, transparent 100%);
-      box-shadow: 0 0 12px 4px rgba(255,69,0,0.6), 0 0 24px 6px rgba(255,159,10,0.25);
-      animation: ss-beam-locked 0.07s ease-in-out infinite alternate;
-    }}
-    @keyframes ss-beam-locked {{
-      0% {{ opacity: 0.85; box-shadow: 0 0 12px 4px rgba(255,69,0,0.6); }}
-      100% {{ opacity: 1; box-shadow: 0 0 18px 6px rgba(255,69,0,0.85); }}
-    }}
-    .ss-burst {{
-      display: none;
-      position: fixed;
-      z-index: 10000;
-      width: 100px;
-      height: 100px;
-      pointer-events: none;
-      transform: translate(-50%, -50%) scale(0);
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(255,255,220,0.95) 0%, rgba(255,200,50,0.75) 30%, rgba(255,100,0,0.4) 60%, transparent 80%);
-      will-change: transform, opacity;
-    }}
-    .ss-burst.is-active {{
-      display: block;
-      animation: ss-burst-anim 0.5s ease-out forwards;
-    }}
-    @keyframes ss-burst-anim {{
-      0% {{ transform: translate(-50%,-50%) scale(0); opacity: 1; }}
-      30% {{ transform: translate(-50%,-50%) scale(1.5); opacity: 0.9; }}
-      70% {{ transform: translate(-50%,-50%) scale(2.5); opacity: 0.35; }}
-      100% {{ transform: translate(-50%,-50%) scale(3.2); opacity: 0; }}
     }}
 
     @keyframes ss-float {{
@@ -2896,10 +2493,6 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .ss-sub {{ animation: none !important; opacity: 0.6 !important; }}
       .ss-glow-border {{ animation: none !important; }}
       .ss-wisps {{ display: none !important; }}
-      .ss-flyer {{ display: none !important; }}
-      .ss-buster {{ display: none !important; }}
-      .ss-beam {{ display: none !important; }}
-      .ss-burst {{ display: none !important; }}
       .ss-bubble {{ opacity: 1 !important; transform: none !important; }}
     }}
 
@@ -2912,24 +2505,18 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .ss-bubble {{ left: 50%; top: auto; bottom: calc(100% + 8px); transform-origin: bottom center; max-width: 170px; font-size: 0.65rem; }}
       .ss-bubble::before {{ left: 50%; top: auto; bottom: -6px; transform: translateX(-50%) rotate(-45deg); }}
       .ss-bubble.is-visible {{ transform: translateX(-50%) translateY(0) scale(1); }}
-      .ss-flyer {{ width: 48px; height: 60px; }}
-      .ss-buster {{ width: 48px; height: 60px; }}
     }}
     @media (min-width: 481px) and (max-width: 700px) {{
       .sunday-banner {{ padding: 32px 24px 26px; }}
       .ss-ghost {{ width: 50px; height: 62px; }}
       .ss-text {{ font-size: 1.4rem; }}
       .ss-sub {{ font-size: 0.75rem; }}
-      .ss-flyer {{ width: 56px; height: 70px; }}
-      .ss-buster {{ width: 56px; height: 70px; }}
     }}
     @media (min-width: 900px) {{
       .sunday-banner {{ padding: 40px 32px 34px; margin: -8px 0 36px; }}
       .ss-ghost {{ width: 64px; height: 80px; }}
       .ss-text {{ font-size: 1.9rem; }}
       .ss-sub {{ font-size: 0.85rem; margin-top: 12px; }}
-      .ss-flyer {{ width: 72px; height: 90px; }}
-      .ss-buster {{ width: 72px; height: 90px; }}
     }}
   </style>
 </head>
@@ -2960,7 +2547,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       <div class="ss-glow-border"></div>
       <div class="ss-wisps" id="sunday-wisps"></div>
       <div class="ss-ghost" aria-hidden="true">
-        <svg class="ss-ghost-normal" viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M40 8C22.3 8 8 22.3 8 40v30c0 2 0.5 3.8 1.2 5.2L16 68l8 8 8-8 8 8 8-8 8 8 8-8 6.8 7.2c0.7-1.4 1.2-3.2 1.2-5.2V40c8 0-14.3-32-32-32z" fill="currentColor" opacity="0.9"/>
           <ellipse cx="28" cy="40" rx="5" ry="6" fill="var(--bg)" opacity="0.85"/>
           <ellipse cx="52" cy="40" rx="5" ry="6" fill="var(--bg)" opacity="0.85"/>
@@ -2968,17 +2555,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
           <ellipse cx="52" cy="41" rx="3" ry="4" fill="var(--ss-eye)"/>
           <ellipse cx="40" cy="54" rx="4" ry="3" fill="var(--bg)" opacity="0.5"/>
         </svg>
-        <svg class="ss-ghost-sad" viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M40 8C22.3 8 8 22.3 8 40v30c0 2 0.5 3.8 1.2 5.2L16 68l8 8 8-8 8 8 8-8 8 8 8-8 6.8 7.2c0.7-1.4 1.2-3.2 1.2-5.2V40c8 0-14.3-32-32-32z" fill="currentColor" opacity="0.9"/>
-          <ellipse cx="28" cy="40" rx="5" ry="6" fill="var(--bg)" opacity="0.85"/>
-          <ellipse cx="52" cy="40" rx="5" ry="6" fill="var(--bg)" opacity="0.85"/>
-          <ellipse cx="28" cy="42" rx="3" ry="3.5" fill="var(--ss-eye)"/>
-          <ellipse cx="52" cy="42" rx="3" ry="3.5" fill="var(--ss-eye)"/>
-          <line x1="25" y1="34" x2="31" y2="36" stroke="var(--ss-eye)" stroke-width="1.8" stroke-linecap="round"/>
-          <line x1="55" y1="34" x2="49" y2="36" stroke="var(--ss-eye)" stroke-width="1.8" stroke-linecap="round"/>
-          <path d="M33 56 Q40 52 47 56" stroke="var(--bg)" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.6"/>
-        </svg>
-        <div class="ss-bubble" id="ss-bubble">So much for the weekend&hellip; Back to the work grind!</div>
+        <div class="ss-bubble" id="ss-bubble">Back to the work grind!</div>
       </div>
       <span class="ss-text" id="sunday-text"></span>
       <span class="ss-sub">Tomorrow is Monday&hellip;</span>
@@ -2988,54 +2565,6 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       Live data &middot; Powered by Cloudflare&nbsp;Pages
     </footer>
   </main>
-  <div id="ss-flyer" class="ss-flyer" aria-hidden="true">
-    <svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M40 8C22.3 8 8 22.3 8 40v30c0 2 0.5 3.8 1.2 5.2L16 68l8 8 8-8 8 8 8-8 8 8 8-8 6.8 7.2c0.7-1.4 1.2-3.2 1.2-5.2V40c8 0-14.3-32-32-32z" fill="currentColor" opacity="0.9"/>
-      <ellipse cx="28" cy="40" rx="5" ry="6" fill="var(--bg)" opacity="0.85"/>
-      <ellipse cx="52" cy="40" rx="5" ry="6" fill="var(--bg)" opacity="0.85"/>
-      <ellipse cx="28" cy="41" rx="3" ry="4" fill="var(--ss-eye)"/>
-      <ellipse cx="52" cy="41" rx="3" ry="4" fill="var(--ss-eye)"/>
-      <ellipse cx="40" cy="54" rx="4" ry="3" fill="var(--bg)" opacity="0.5"/>
-    </svg>
-  </div>
-  <div id="ss-buster" class="ss-buster" aria-hidden="true">
-    <svg viewBox="0 0 80 96" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <!-- Proton pack (behind body) -->
-      <rect x="10" y="36" width="14" height="20" rx="3" fill="var(--ss-buster-pack)"/>
-      <circle cx="17" cy="44" r="3" fill="var(--ss-buster-detail)" opacity="0.6"/>
-      <circle cx="17" cy="52" r="2" fill="#ff6b00" opacity="0.8"/>
-      <!-- Body (simple jumpsuit) -->
-      <path d="M24 34 Q40 28 56 34 L58 68 Q40 74 22 68 Z" fill="var(--ss-buster-suit)"/>
-      <!-- Belt -->
-      <rect x="24" y="60" width="32" height="4" rx="1" fill="var(--ss-buster-boot)" opacity="0.7"/>
-      <!-- Legs -->
-      <rect x="28" y="68" width="10" height="18" rx="3" fill="var(--ss-buster-suit)" opacity="0.9"/>
-      <rect x="42" y="68" width="10" height="18" rx="3" fill="var(--ss-buster-suit)" opacity="0.9"/>
-      <!-- Boots -->
-      <rect x="26" y="83" width="14" height="7" rx="3.5" fill="var(--ss-buster-boot)"/>
-      <rect x="40" y="83" width="14" height="7" rx="3.5" fill="var(--ss-buster-boot)"/>
-      <!-- Head -->
-      <circle cx="40" cy="20" r="14" fill="var(--ss-buster-skin)"/>
-      <!-- Hair swoosh -->
-      <path d="M26 17 Q28 6 40 5 Q52 6 54 17 L52 20 Q50 12 40 11 Q30 12 28 20 Z" fill="var(--ss-buster-hair)"/>
-      <!-- Eyes -->
-      <circle cx="34" cy="20" r="2" fill="var(--ss-buster-hair)"/>
-      <circle cx="46" cy="20" r="2" fill="var(--ss-buster-hair)"/>
-      <!-- Smirk -->
-      <path d="M36 26 Q40 29 46 26" stroke="var(--ss-buster-hair)" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.7"/>
-      <!-- Arm + wand -->
-      <path d="M52 38 L64 32" stroke="var(--ss-buster-suit)" stroke-width="6" stroke-linecap="round"/>
-      <circle cx="64" cy="32" r="3" fill="var(--ss-buster-skin)"/>
-      <rect x="63" y="28" width="14" height="7" rx="2.5" fill="var(--ss-buster-wand)"/>
-      <!-- Wand tip glow -->
-      <circle cx="78" cy="31.5" r="3.5" fill="#ff6b00" opacity="0.8"/>
-      <circle cx="78" cy="31.5" r="1.8" fill="#ffcc02"/>
-      <!-- Cable from pack to wand -->
-      <path d="M24 40 Q40 30 64 32" stroke="var(--ss-buster-detail)" stroke-width="1.8" fill="none" opacity="0.4"/>
-    </svg>
-  </div>
-  <div id="ss-beam" class="ss-beam" aria-hidden="true"></div>
-  <div id="ss-burst" class="ss-burst" aria-hidden="true"></div>
   <button class="theme-toggle" aria-label="Toggle light/dark mode" title="Toggle theme">
     <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
     <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
