@@ -2337,7 +2337,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     .ss-ghost {{
       width: 56px;
       height: 70px;
-      margin-bottom: 8px;
+      margin-bottom: 10px;
       color: var(--ss-ghost);
       filter: drop-shadow(0 0 16px rgba(139,92,246,.35));
       animation: ss-float 5s ease-in-out infinite;
@@ -2348,11 +2348,12 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       width: 100%;
       height: 100%;
     }}
-    /* Speech bubble */
+    /* Speech bubble — centered above ghost on all sizes */
     .ss-bubble {{
       position: absolute;
-      top: -14px;
-      left: calc(100% + 10px);
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%) translateY(6px) scale(0.95);
       width: max-content;
       max-width: 200px;
       padding: 8px 12px;
@@ -2365,7 +2366,6 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       border-radius: 12px;
       box-shadow: 0 2px 12px rgba(0,0,0,.15);
       opacity: 0;
-      transform: translateY(6px) scale(0.95);
       transition: opacity 0.6s ease, transform 0.6s ease;
       pointer-events: none;
       z-index: 2;
@@ -2374,18 +2374,18 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     .ss-bubble::before {{
       content: '';
       position: absolute;
-      left: -6px;
-      top: 18px;
+      left: 50%;
+      bottom: -6px;
       width: 10px;
       height: 10px;
       background: var(--surface-2);
-      border-left: 1px solid var(--border-2);
+      border-right: 1px solid var(--border-2);
       border-bottom: 1px solid var(--border-2);
-      transform: rotate(45deg);
+      transform: translateX(-50%) rotate(45deg);
     }}
     .ss-bubble.is-visible {{
       opacity: 1;
-      transform: translateY(0) scale(1);
+      transform: translateX(-50%) translateY(0) scale(1);
     }}
 
     @keyframes ss-float {{
@@ -2493,28 +2493,26 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .ss-sub {{ animation: none !important; opacity: 0.6 !important; }}
       .ss-glow-border {{ animation: none !important; }}
       .ss-wisps {{ display: none !important; }}
-      .ss-bubble {{ opacity: 1 !important; transform: none !important; }}
+      .ss-bubble {{ opacity: 1 !important; transform: translateX(-50%) !important; }}
     }}
 
     @media (max-width: 480px) {{
-      .sunday-banner {{ padding: 28px 18px 22px; margin: -4px 0 24px; }}
+      .sunday-banner {{ padding: 32px 18px 22px; margin: -4px 0 24px; }}
       .ss-ghost {{ width: 44px; height: 55px; }}
       .ss-text {{ font-size: 1.1rem; gap: 1px; }}
       .ss-space {{ width: 5px; }}
       .ss-sub {{ font-size: 0.68rem; margin-top: 8px; }}
-      .ss-bubble {{ left: 50%; top: auto; bottom: calc(100% + 8px); transform-origin: bottom center; max-width: 170px; font-size: 0.65rem; }}
-      .ss-bubble::before {{ left: 50%; top: auto; bottom: -6px; transform: translateX(-50%) rotate(-45deg); }}
-      .ss-bubble.is-visible {{ transform: translateX(-50%) translateY(0) scale(1); }}
+      .ss-bubble {{ max-width: 170px; font-size: 0.65rem; }}
     }}
     @media (min-width: 481px) and (max-width: 700px) {{
-      .sunday-banner {{ padding: 32px 24px 26px; }}
+      .sunday-banner {{ padding: 34px 24px 26px; }}
       .ss-ghost {{ width: 50px; height: 62px; }}
       .ss-text {{ font-size: 1.4rem; }}
       .ss-sub {{ font-size: 0.75rem; }}
     }}
     @media (min-width: 900px) {{
-      .sunday-banner {{ padding: 40px 32px 34px; margin: -8px 0 36px; }}
-      .ss-ghost {{ width: 64px; height: 80px; }}
+      .sunday-banner {{ padding: 42px 32px 34px; margin: -8px 0 36px; }}
+      .ss-ghost {{ width: 64px; height: 80px; margin-bottom: 14px; }}
       .ss-text {{ font-size: 1.9rem; }}
       .ss-sub {{ font-size: 0.85rem; margin-top: 12px; }}
     }}
