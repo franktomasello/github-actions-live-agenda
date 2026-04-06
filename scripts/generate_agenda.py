@@ -668,10 +668,53 @@ _RENDER_JS = r"""
     banner.style.display = 'flex';
     banner.setAttribute('aria-hidden', 'false');
 
-    // Show speech bubble after a short delay
+    // Cycle through funny Sunday dread quotes
     var bubble = document.getElementById('ss-bubble');
     if (bubble && !bubble.classList.contains('is-visible')) {
+      var quotes = [
+        'I can feel Monday coming\u2026',
+        'Is it too late to call in sick tomorrow?',
+        'My weekend had a weekend and it\u2019s over',
+        'Back to the work grind!',
+        'Sunday: the day anxiety picks its outfit for Monday',
+        'POV: you remembered tomorrow is Monday',
+        'The Sunday Scaries are undefeated',
+        'Alexa, cancel Monday',
+        'Weekend status: critically low',
+        'The dread is real\u2026',
+      ];
+      var pick = quotes[Math.floor(Math.random() * quotes.length)];
+      bubble.textContent = pick;
       setTimeout(function () { bubble.classList.add('is-visible'); }, 1200);
+
+      // Swap quote every 8s with fade
+      setInterval(function () {
+        bubble.classList.remove('is-visible');
+        setTimeout(function () {
+          pick = quotes[Math.floor(Math.random() * quotes.length)];
+          bubble.textContent = pick;
+          bubble.classList.add('is-visible');
+        }, 600);
+      }, 8000);
+    }
+
+    // Nervous eye-shift on the ghost
+    var eyes = document.querySelectorAll('.ss-ghost .ss-eye');
+    if (eyes.length) {
+      var dirs = [
+        { x: -1.5, y: 0 }, { x: 1.5, y: 0 },
+        { x: 0, y: -1 }, { x: -1, y: 1 },
+        { x: 1.5, y: -0.5 }, { x: 0, y: 0 },
+      ];
+      var ei = 0;
+      setInterval(function () {
+        ei = (ei + 1) % dirs.length;
+        var d = dirs[ei];
+        for (var k = 0; k < eyes.length; k++) {
+          eyes[k].style.transition = 'transform 0.3s ease';
+          eyes[k].style.transform = 'translate(' + d.x + 'px,' + d.y + 'px)';
+        }
+      }, 1800);
     }
   }
 })();
@@ -2350,6 +2393,11 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       height: 70px;
       color: var(--ss-ghost);
       filter: drop-shadow(0 0 16px rgba(139,92,246,.35));
+      animation: ss-tremble 0.15s ease-in-out infinite alternate;
+    }}
+    @keyframes ss-tremble {{
+      0% {{ transform: translateX(-0.4px) rotate(-0.3deg); }}
+      100% {{ transform: translateX(0.4px) rotate(0.3deg); }}
     }}
     .ss-ghost svg {{
       width: 100%;
@@ -2374,6 +2422,8 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       pointer-events: none;
       z-index: 2;
       white-space: nowrap;
+      max-width: 260px;
+      text-align: center;
     }}
     .ss-bubble::after {{
       content: '';
@@ -2494,6 +2544,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       .sunday-banner, .sunday-banner::before, .sunday-banner::after {{ animation: none !important; }}
       .ss-letter {{ animation: none !important; }}
       .ss-ghost-group {{ animation: none !important; }}
+      .ss-ghost {{ animation: none !important; }}
       .ss-sub {{ animation: none !important; opacity: 0.6 !important; }}
       .ss-glow-border {{ animation: none !important; }}
       .ss-wisps {{ display: none !important; }}
@@ -2556,8 +2607,8 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
             <path d="M40 8C22.3 8 8 22.3 8 40v30c0 2 0.5 3.8 1.2 5.2L16 68l8 8 8-8 8 8 8-8 8 8 8-8 6.8 7.2c0.7-1.4 1.2-3.2 1.2-5.2V40c8 0-14.3-32-32-32z" fill="currentColor" opacity="0.9"/>
             <ellipse cx="28" cy="40" rx="5" ry="6" fill="var(--bg)" opacity="0.85"/>
             <ellipse cx="52" cy="40" rx="5" ry="6" fill="var(--bg)" opacity="0.85"/>
-            <ellipse cx="28" cy="41" rx="3" ry="4" fill="var(--ss-eye)"/>
-            <ellipse cx="52" cy="41" rx="3" ry="4" fill="var(--ss-eye)"/>
+            <ellipse class="ss-eye" cx="28" cy="41" rx="3" ry="4" fill="var(--ss-eye)"/>
+            <ellipse class="ss-eye" cx="52" cy="41" rx="3" ry="4" fill="var(--ss-eye)"/>
             <ellipse cx="40" cy="54" rx="4" ry="3" fill="var(--bg)" opacity="0.5"/>
           </svg>
         </div>
