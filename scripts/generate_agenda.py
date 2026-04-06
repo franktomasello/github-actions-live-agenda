@@ -2351,7 +2351,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     /* Speech bubble — sits above ghost in flex flow */
     .ss-bubble {{
       position: relative;
-      margin-bottom: 6px;
+      margin-bottom: 14px;
       padding: 6px 14px;
       font-size: 0.72rem;
       font-weight: 520;
