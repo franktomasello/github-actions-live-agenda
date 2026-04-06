@@ -2333,25 +2333,32 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       inherits: false;
     }}
 
+    /* Ghost + bubble group — floats together */
+    .ss-ghost-group {{
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 10px;
+      animation: ss-float 5s ease-in-out infinite;
+      position: relative;
+      z-index: 1;
+    }}
+
     /* Ghost character */
     .ss-ghost {{
       width: 56px;
       height: 70px;
-      margin-bottom: 10px;
       color: var(--ss-ghost);
       filter: drop-shadow(0 0 16px rgba(139,92,246,.35));
-      animation: ss-float 5s ease-in-out infinite;
-      position: relative;
-      z-index: 1;
     }}
     .ss-ghost svg {{
       width: 100%;
       height: 100%;
     }}
-    /* Speech bubble — sits above ghost in flex flow */
+    /* Speech bubble */
     .ss-bubble {{
       position: relative;
-      margin-bottom: 14px;
+      margin-bottom: 10px;
       padding: 6px 14px;
       font-size: 0.72rem;
       font-weight: 520;
@@ -2486,7 +2493,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     @media (prefers-reduced-motion: reduce) {{
       .sunday-banner, .sunday-banner::before, .sunday-banner::after {{ animation: none !important; }}
       .ss-letter {{ animation: none !important; }}
-      .ss-ghost {{ animation: none !important; }}
+      .ss-ghost-group {{ animation: none !important; }}
       .ss-sub {{ animation: none !important; opacity: 0.6 !important; }}
       .ss-glow-border {{ animation: none !important; }}
       .ss-wisps {{ display: none !important; }}
@@ -2509,7 +2516,8 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     }}
     @media (min-width: 900px) {{
       .sunday-banner {{ padding: 36px 32px 34px; margin: -8px 0 36px; }}
-      .ss-ghost {{ width: 64px; height: 80px; margin-bottom: 14px; }}
+      .ss-ghost {{ width: 64px; height: 80px; }}
+      .ss-ghost-group {{ margin-bottom: 14px; }}
       .ss-text {{ font-size: 1.9rem; }}
       .ss-sub {{ font-size: 0.85rem; margin-top: 12px; }}
     }}
@@ -2541,16 +2549,18 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
     <div class="sunday-banner" id="sunday-banner" aria-hidden="true">
       <div class="ss-glow-border"></div>
       <div class="ss-wisps" id="sunday-wisps"></div>
-      <div class="ss-bubble" id="ss-bubble">Back to the work grind!</div>
-      <div class="ss-ghost" aria-hidden="true">
-        <svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M40 8C22.3 8 8 22.3 8 40v30c0 2 0.5 3.8 1.2 5.2L16 68l8 8 8-8 8 8 8-8 8 8 8-8 6.8 7.2c0.7-1.4 1.2-3.2 1.2-5.2V40c8 0-14.3-32-32-32z" fill="currentColor" opacity="0.9"/>
-          <ellipse cx="28" cy="40" rx="5" ry="6" fill="var(--bg)" opacity="0.85"/>
-          <ellipse cx="52" cy="40" rx="5" ry="6" fill="var(--bg)" opacity="0.85"/>
-          <ellipse cx="28" cy="41" rx="3" ry="4" fill="var(--ss-eye)"/>
-          <ellipse cx="52" cy="41" rx="3" ry="4" fill="var(--ss-eye)"/>
-          <ellipse cx="40" cy="54" rx="4" ry="3" fill="var(--bg)" opacity="0.5"/>
-        </svg>
+      <div class="ss-ghost-group">
+        <div class="ss-bubble" id="ss-bubble">Back to the work grind!</div>
+        <div class="ss-ghost" aria-hidden="true">
+          <svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M40 8C22.3 8 8 22.3 8 40v30c0 2 0.5 3.8 1.2 5.2L16 68l8 8 8-8 8 8 8-8 8 8 8-8 6.8 7.2c0.7-1.4 1.2-3.2 1.2-5.2V40c8 0-14.3-32-32-32z" fill="currentColor" opacity="0.9"/>
+            <ellipse cx="28" cy="40" rx="5" ry="6" fill="var(--bg)" opacity="0.85"/>
+            <ellipse cx="52" cy="40" rx="5" ry="6" fill="var(--bg)" opacity="0.85"/>
+            <ellipse cx="28" cy="41" rx="3" ry="4" fill="var(--ss-eye)"/>
+            <ellipse cx="52" cy="41" rx="3" ry="4" fill="var(--ss-eye)"/>
+            <ellipse cx="40" cy="54" rx="4" ry="3" fill="var(--bg)" opacity="0.5"/>
+          </svg>
+        </div>
       </div>
       <span class="ss-text" id="sunday-text"></span>
       <span class="ss-sub">Tomorrow is Monday&hellip;</span>
