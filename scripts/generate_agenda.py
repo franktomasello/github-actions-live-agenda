@@ -2421,7 +2421,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       transition: opacity 0.6s ease, transform 0.6s ease;
       pointer-events: none;
       z-index: 2;
-      white-space: nowrap;
+      white-space: normal;
       max-width: 260px;
       text-align: center;
     }}
