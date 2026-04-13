@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -67,6 +68,9 @@ _RENDER_JS = r"""
     return String(s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function escTitle(s) {
+    return esc(s).replace(/\s([\S]*[\u2192\u2197\u279C\u2794\u27A4\u279E\u21D2\u27F6\u2B95]+)$/, '\u00a0$1');
   }
 
   // ── Time helpers ────────────────────────────────────────────────────────────
@@ -190,7 +194,7 @@ _RENDER_JS = r"""
         + (isNow ? '<span class="badge live">' + esc(rel) + '</span>' : '')
         + (rel && !isNow ? '<span class="countdown">' + esc(rel) + '</span>' : '')
       + '</div></div>'
-      + '<h3>' + esc(ev.title) + '</h3>'
+      + '<h3>' + escTitle(ev.title) + '</h3>'
       + '<div class="range">' + esc(rangeDisp) + '</div>'
       + progressHtml
       + (ev.location ? '<div class="loc">' + LOC_ICON + '<span>' + esc(ev.location) + '</span></div>' : '')
@@ -905,6 +909,15 @@ def _esc(text: str) -> str:
     return html.escape(text)
 
 
+_TRAILING_ARROW_RE = re.compile(r'\s([^\s]*[\u2192\u2197\u279C\u2794\u27A4\u279E\u21D2\u27F6\u2B95]+)$')
+
+
+def _esc_title(text: str) -> str:
+    """Escape title and prevent a trailing arrow from orphaning on its own line."""
+    escaped = html.escape(text)
+    return _TRAILING_ARROW_RE.sub(r'&nbsp;\1', escaped)
+
+
 def _event_accent(event: Event) -> str:
     """Pick a left-border accent color based on time of day."""
     if event.is_all_day:
@@ -1027,7 +1040,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
                     f"</div>"
                     f'<div class="card-meta-right">{badge}{rel_html}</div>'
                     f"</div>"
-                    f"<h3>{_esc(event.title)}</h3>"
+                    f"<h3>{_esc_title(event.title)}</h3>"
                     f'<div class="range">{_esc(format_time(event))}</div>'
                     f"{progress_html}"
                     f"{location}"
