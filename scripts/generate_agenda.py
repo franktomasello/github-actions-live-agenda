@@ -259,6 +259,10 @@ _RENDER_JS = r"""
     var chips = document.querySelectorAll('.chip');
     if (chips.length >= 3) chips[2].textContent = events.length + ' event' + (events.length !== 1 ? 's' : '');
 
+    // Timezone chip — reflect the viewer's actual TZ, not the server default
+    var tzChip = document.getElementById('tz-chip');
+    if (tzChip) tzChip.textContent = TZ;
+
     // Group by section
     var grouped = {}, order = [];
     events.forEach(function (e) {
@@ -2594,7 +2598,7 @@ def render(events: Iterable[Event], tz: ZoneInfo) -> str:
       </div>
       <div class="hero-chips">
         <span class="chip">{WINDOW_HOURS}h window</span>
-        <span class="chip">{_esc(TIMEZONE)}</span>
+        <span class="chip" id="tz-chip">{_esc(TIMEZONE)}</span>
         <span class="chip">{total_events} event{"s" if total_events != 1 else ""}</span>
       </div>
       <div id="hero-next-wrap">{hero_next}</div>
