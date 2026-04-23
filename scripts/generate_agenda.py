@@ -21,7 +21,16 @@ import recurring_ical_events
 _RENDER_JS = r"""
 (function () {
   'use strict';
-  var TZ           = window.__AGENDA_TZ__;
+  // Display times in the viewer's local timezone so the agenda matches the
+  // clock on their wrist — the server-configured AGENDA_TIMEZONE is only used
+  // as a fallback when the browser can't resolve one.
+  var CONFIG_TZ = window.__AGENDA_TZ__;
+  var TZ;
+  try {
+    TZ = (Intl.DateTimeFormat().resolvedOptions().timeZone) || CONFIG_TZ;
+  } catch (e) {
+    TZ = CONFIG_TZ;
+  }
   var WINDOW_HOURS = window.__AGENDA_WINDOW_HOURS__;
   var POLL_MS      = 5000;
   var TICK_MS      = 1000;
